@@ -3,9 +3,18 @@ import UIKit
 
 enum ExportBuilder {
     @MainActor
-    static func copyAgentContext(capture: CapturedScreen, annotations: [Annotation]) {
-        let annotatedImage = makeAnnotatedScreenshot(capture: capture, annotations: annotations)
-        UIPasteboard.general.image = annotatedImage
+    static func copyAgentContext(capture: CapturedScreen, annotations: [Annotation], format: CopyFormat) {
+        switch format {
+        case .annotatedScreenshot:
+            let annotatedImage = makeAnnotatedScreenshot(capture: capture, annotations: annotations)
+            UIPasteboard.general.image = annotatedImage
+        case .markdown:
+            UIPasteboard.general.string = makeMarkdown(
+                capture: capture,
+                annotations: annotations,
+                includeSnippetLinks: false
+            )
+        }
     }
 
     @MainActor

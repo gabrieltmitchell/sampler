@@ -25,6 +25,7 @@ final class AnnotationViewController: UIViewController {
             draftView?.overlayTheme = overlayTheme
         }
     }
+    var copyFormat: CopyFormat = .annotatedScreenshot
     var clearsAnnotationsAfterSend = false
 
     init(capture: CapturedScreen) {
@@ -81,7 +82,7 @@ final class AnnotationViewController: UIViewController {
             return
         }
 
-        ExportBuilder.copyAgentContext(capture: capture, annotations: annotations)
+        ExportBuilder.copyAgentContext(capture: capture, annotations: annotations, format: copyFormat)
         showToast(title: "Copied to Clipboard", iconName: "checkmark.circle.fill")
         if clearsAnnotationsAfterSend {
             clearAnnotations()

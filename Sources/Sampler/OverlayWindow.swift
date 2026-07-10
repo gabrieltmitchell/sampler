@@ -57,6 +57,7 @@ final class OverlayRootViewController: UIViewController {
     private var selectedAnnotationColor: UIColor = .systemBlue
     private var clearsAnnotationsAfterSend = false
     private var selectedTheme: OverlayTheme = .light
+    private var selectedCopyFormat: CopyFormat = .annotatedScreenshot
     private lazy var settingsBackgroundTapGesture = UITapGestureRecognizer(
         target: self,
         action: #selector(handleSettingsBackgroundTap(_:))
@@ -92,6 +93,7 @@ final class OverlayRootViewController: UIViewController {
         let annotationViewController = AnnotationViewController(capture: capture)
         annotationViewController.annotationColor = selectedAnnotationColor
         annotationViewController.overlayTheme = selectedTheme
+        annotationViewController.copyFormat = selectedCopyFormat
         annotationViewController.clearsAnnotationsAfterSend = clearsAnnotationsAfterSend
         addChild(annotationViewController)
         annotationViewController.view.frame = view.bounds
@@ -204,6 +206,10 @@ final class OverlayRootViewController: UIViewController {
             self?.selectedTheme = theme
             self?.overrideUserInterfaceStyle = theme.userInterfaceStyle
             self?.annotationViewController?.overlayTheme = theme
+        }
+        widget.onCopyFormatChange = { [weak self] copyFormat in
+            self?.selectedCopyFormat = copyFormat
+            self?.annotationViewController?.copyFormat = copyFormat
         }
 
         widget.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleWidgetPan(_:))))
@@ -389,7 +395,7 @@ final class FloatingAnnotationWidget: UIControl {
     static func settingsSize(in bounds: CGRect) -> CGSize {
         CGSize(
             width: max(280, bounds.width - 24),
-            height: min(max(410, bounds.height * 0.52), bounds.height - 28)
+            height: min(max(458, bounds.height * 0.58), bounds.height - 28)
         )
     }
 
@@ -403,11 +409,17 @@ final class FloatingAnnotationWidget: UIControl {
     var onColorChange: ((UIColor) -> Void)?
     var onClearAfterSendChange: ((Bool) -> Void)?
     var onThemeChange: ((OverlayTheme) -> Void)?
+    var onCopyFormatChange: ((CopyFormat) -> Void)?
 
     private(set) var mode: Mode = .collapsed
     private var overlayTheme: OverlayTheme = .light {
         didSet {
             applyTheme()
+        }
+    }
+    private var copyFormat: CopyFormat = .annotatedScreenshot {
+        didSet {
+            updateCopyFormatButton(from: oldValue, animated: true)
         }
     }
 
@@ -425,6 +437,8 @@ final class FloatingAnnotationWidget: UIControl {
     private var dividers: [UIView] = []
     private var chevronViews: [UIImageView] = []
     private var themeToggleButton: UIButton?
+    private var copyFormatValueLabel: UILabel?
+    private var copyFormatIndicatorDots: [UIView] = []
     private var colorButtons: [ColorOptionButton] = []
     private var clearAfterSendButton: AnimatedCheckboxButton?
 
@@ -598,6 +612,38 @@ final class FloatingAnnotationWidget: UIControl {
 
         let titleDivider = makeDivider()
 
+        let copyFormatRow = makeSettingsRow(title: "Copy Format")
+        copyFormatRow.addTarget(self, action: #selector(copyFormatTapped), for: .touchUpInside)
+        let copyFormatValueLabel = UILabel()
+        copyFormatValueLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        copyFormatValueLabel.textAlignment = .right
+        copyFormatValueLabel.translatesAutoresizingMaskIntoConstraints = false
+        copyFormatRow.addSubview(copyFormatValueLabel)
+        self.copyFormatValueLabel = copyFormatValueLabel
+        secondaryLabels.append(copyFormatValueLabel)
+
+        let copyFormatIndicatorStack = UIStackView()
+        copyFormatIndicatorStack.axis = .vertical
+        copyFormatIndicatorStack.alignment = .center
+        copyFormatIndicatorStack.spacing = 5
+        copyFormatIndicatorStack.isUserInteractionEnabled = false
+        copyFormatIndicatorStack.translatesAutoresizingMaskIntoConstraints = false
+        copyFormatRow.addSubview(copyFormatIndicatorStack)
+
+        copyFormatIndicatorDots = (0..<2).map { _ in
+            let dot = UIView()
+            dot.layer.cornerRadius = 3
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: 6),
+                dot.heightAnchor.constraint(equalToConstant: 6)
+            ])
+            copyFormatIndicatorStack.addArrangedSubview(dot)
+            return dot
+        }
+
+        let copyFormatDivider = makeDivider()
+
         let hideRow = makeSettingsRow(title: "Hide Until Restart")
         let hideSwitch = UISwitch()
         hideSwitch.onTintColor = .systemBlue
@@ -669,9 +715,26 @@ final class FloatingAnnotationWidget: UIControl {
             titleDivider.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
             titleDivider.heightAnchor.constraint(equalToConstant: 1),
 
+            copyFormatRow.leadingAnchor.constraint(equalTo: settingsView.leadingAnchor, constant: 20),
+            copyFormatRow.trailingAnchor.constraint(equalTo: settingsView.trailingAnchor, constant: -20),
+            copyFormatRow.topAnchor.constraint(equalTo: titleDivider.bottomAnchor, constant: 12),
+            copyFormatRow.heightAnchor.constraint(equalToConstant: 34),
+
+            copyFormatValueLabel.trailingAnchor.constraint(equalTo: copyFormatIndicatorStack.leadingAnchor, constant: -10),
+            copyFormatValueLabel.centerYAnchor.constraint(equalTo: copyFormatRow.centerYAnchor),
+            copyFormatValueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: copyFormatRow.leadingAnchor, constant: 120),
+
+            copyFormatIndicatorStack.trailingAnchor.constraint(equalTo: copyFormatRow.trailingAnchor, constant: -8),
+            copyFormatIndicatorStack.centerYAnchor.constraint(equalTo: copyFormatRow.centerYAnchor),
+
+            copyFormatDivider.leadingAnchor.constraint(equalTo: settingsView.leadingAnchor, constant: 20),
+            copyFormatDivider.trailingAnchor.constraint(equalTo: settingsView.trailingAnchor, constant: -20),
+            copyFormatDivider.topAnchor.constraint(equalTo: copyFormatRow.bottomAnchor, constant: 12),
+            copyFormatDivider.heightAnchor.constraint(equalToConstant: 1),
+
             hideRow.leadingAnchor.constraint(equalTo: settingsView.leadingAnchor, constant: 20),
             hideRow.trailingAnchor.constraint(equalTo: settingsView.trailingAnchor, constant: -20),
-            hideRow.topAnchor.constraint(equalTo: titleDivider.bottomAnchor, constant: 12),
+            hideRow.topAnchor.constraint(equalTo: copyFormatDivider.bottomAnchor, constant: 12),
             hideRow.heightAnchor.constraint(equalToConstant: 34),
 
             hideSwitch.trailingAnchor.constraint(equalTo: hideRow.trailingAnchor),
@@ -743,6 +806,10 @@ final class FloatingAnnotationWidget: UIControl {
             titleLabel,
             versionLabel,
             titleDivider,
+            copyFormatRow,
+            copyFormatValueLabel,
+            copyFormatIndicatorStack,
+            copyFormatDivider,
             hideRow,
             firstDivider,
             markerLabel,
@@ -788,7 +855,10 @@ final class FloatingAnnotationWidget: UIControl {
         dividers.append(titleDivider)
 
         let bodyStack = UIStackView(arrangedSubviews: [
-            makeClipboardHelpLabel("Copy the annotated image on your iPhone, then press Cmd+V on your Mac."),
+            makeClipboardHelpLabel(
+                "Use Copy-to-clipboard to seamlessly paste annotations from Sampler to your Mac.",
+                emphasis: .primary
+            ),
             makeClipboardHelpLabel("Requirements: same Apple ID, Bluetooth, Wi-Fi, and Handoff enabled."),
             makeClipboardHelpLabel("iPhone: Settings > General > AirPlay & Continuity > Handoff: On"),
             makeClipboardHelpLabel("Mac: System Settings > General > AirDrop & Handoff > Allow Handoff between this Mac and your iCloud devices: On"),
@@ -825,12 +895,22 @@ final class FloatingAnnotationWidget: UIControl {
         ])
     }
 
-    private func makeClipboardHelpLabel(_ text: String) -> UILabel {
+    private enum ClipboardHelpEmphasis {
+        case primary
+        case secondary
+    }
+
+    private func makeClipboardHelpLabel(_ text: String, emphasis: ClipboardHelpEmphasis = .secondary) -> UILabel {
         let label = UILabel()
         label.text = text
         label.font = .systemFont(ofSize: 15, weight: .medium)
         label.numberOfLines = 0
-        secondaryLabels.append(label)
+        switch emphasis {
+        case .primary:
+            primaryLabels.append(label)
+        case .secondary:
+            secondaryLabels.append(label)
+        }
         return label
     }
 
@@ -844,8 +924,8 @@ final class FloatingAnnotationWidget: UIControl {
         return label
     }
 
-    private func makeSettingsRow(title: String) -> UIView {
-        let row = UIView()
+    private func makeSettingsRow(title: String) -> UIControl {
+        let row = UIControl()
         row.translatesAutoresizingMaskIntoConstraints = false
         settingsView.addSubview(row)
 
@@ -1021,8 +1101,34 @@ final class FloatingAnnotationWidget: UIControl {
             ),
             for: .normal
         )
+        updateCopyFormatButton()
         clearAfterSendButton?.applyTheme(overlayTheme)
         colorButtons.forEach { $0.applyTheme(overlayTheme) }
+    }
+
+    private func updateCopyFormatButton(from previousFormat: CopyFormat? = nil, animated: Bool = false) {
+        let activeIndex = copyFormat == .annotatedScreenshot ? 0 : 1
+        let changes = {
+            self.copyFormatValueLabel?.text = self.copyFormat.displayTitle
+            self.copyFormatValueLabel?.textColor = self.overlayTheme.secondaryText
+            for (index, dot) in self.copyFormatIndicatorDots.enumerated() {
+                dot.backgroundColor = index == activeIndex
+                    ? self.overlayTheme.primaryText
+                    : self.overlayTheme.divider
+            }
+        }
+
+        guard animated, previousFormat != nil else {
+            changes()
+            return
+        }
+
+        UIView.animate(
+            withDuration: 0.18,
+            delay: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseInOut],
+            animations: changes
+        )
     }
 
     @objc private func colorTapped(_ sender: ColorOptionButton) {
@@ -1041,6 +1147,12 @@ final class FloatingAnnotationWidget: UIControl {
         triggerHaptic()
         overlayTheme = overlayTheme.toggled
         onThemeChange?(overlayTheme)
+    }
+
+    @objc private func copyFormatTapped() {
+        triggerHaptic()
+        copyFormat = copyFormat.toggled
+        onCopyFormatChange?(copyFormat)
     }
 
     @objc private func closeTapped() {

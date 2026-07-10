@@ -89,6 +89,29 @@ enum SamplerError: LocalizedError {
     }
 }
 
+enum CopyFormat {
+    case annotatedScreenshot
+    case markdown
+
+    var toggled: CopyFormat {
+        switch self {
+        case .annotatedScreenshot:
+            return .markdown
+        case .markdown:
+            return .annotatedScreenshot
+        }
+    }
+
+    var displayTitle: String {
+        switch self {
+        case .annotatedScreenshot:
+            return "Screenshot"
+        case .markdown:
+            return "Markdown"
+        }
+    }
+}
+
 enum OverlayTheme {
     case light
     case dark
@@ -159,9 +182,9 @@ enum OverlayTheme {
     var divider: UIColor {
         switch self {
         case .light:
-            return UIColor.black.withAlphaComponent(0.12)
+            return UIColor.black.withAlphaComponent(0.07)
         case .dark:
-            return UIColor.white.withAlphaComponent(0.12)
+            return UIColor.white.withAlphaComponent(0.08)
         }
     }
 
