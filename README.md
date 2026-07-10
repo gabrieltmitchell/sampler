@@ -1,5 +1,7 @@
 # Sampler
 
+[![downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fgabrieltmitchell%2Fsampler%2Ftraffic%2Fbadge.json)](https://github.com/gabrieltmitchell/sampler)
+
 Sampler is a lightweight visual feedback widget for iOS apps. Add it to a local Debug build, tap the floating button, annotate the screen, and export structured feedback that helps AI coding agents understand exactly what you mean.
 
 Sampler is local-first and debug-only. The package compiles the overlay implementation only for Debug iOS builds, and `Sampler.start()` is a no-op in Release builds.
