@@ -1,6 +1,7 @@
 #if os(iOS)
 import UIKit
 #endif
+import Foundation
 
 @MainActor
 public enum Sampler {
@@ -8,7 +9,7 @@ public enum Sampler {
     private static var controller: SamplerController?
     private static var isHiddenUntilRestart = false
 
-    public static func start(in windowScene: UIWindowScene? = nil) {
+    public static func start(in windowScene: UIWindowScene? = nil, endpoint: URL? = nil) {
         guard !isHiddenUntilRestart, controller == nil else {
             return
         }
@@ -18,9 +19,13 @@ public enum Sampler {
             return
         }
 
-        let newController = SamplerController(windowScene: scene)
+        let newController = SamplerController(windowScene: scene, endpoint: endpoint)
         controller = newController
         newController.start()
+    }
+
+    public static func start(endpoint: URL) {
+        start(in: nil, endpoint: endpoint)
     }
 
     public static func stop() {
@@ -34,7 +39,9 @@ public enum Sampler {
     }
 #else
     #if os(iOS)
-    public static func start(in windowScene: UIWindowScene? = nil) {}
+    public static func start(in windowScene: UIWindowScene? = nil, endpoint: URL? = nil) {}
+
+    public static func start(endpoint: URL) {}
     #else
     public static func start() {}
     #endif
@@ -58,9 +65,11 @@ final class SamplerController {
     private weak var windowScene: UIWindowScene?
     private var overlayWindow: OverlayWindow?
     private var rootViewController: OverlayRootViewController?
+    private let endpoint: URL?
 
-    init(windowScene: UIWindowScene) {
+    init(windowScene: UIWindowScene, endpoint: URL?) {
         self.windowScene = windowScene
+        self.endpoint = endpoint
     }
 
     func start() {
@@ -69,6 +78,7 @@ final class SamplerController {
         }
 
         let rootViewController = OverlayRootViewController()
+        rootViewController.agentEndpoint = endpoint
         rootViewController.delegate = self
 
         let overlayWindow = OverlayWindow(windowScene: windowScene)

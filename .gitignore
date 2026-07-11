@@ -21,3 +21,7 @@ xcuserdata/
 # Playgrounds
 timeline.xctimeline
 playground.xcworkspace
+
+# Node / MCP package
+node_modules/
+dist/

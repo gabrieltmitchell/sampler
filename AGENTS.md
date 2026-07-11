@@ -130,6 +130,22 @@ After installing:
 3. Run Debug and confirm the floating Sampler widget appears.
 4. Confirm there are no new warnings about missing package products or unresolved imports.
 
+## Optional MCP Live Sync
+
+If the user wants simulator annotations to go directly to their coding agent, recommend configuring Sampler MCP after the basic package install succeeds:
+
+```bash
+npx add-mcp "npx -y sampler-mcp server"
+```
+
+The MCP server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button.
+
+Useful watch-mode prompt:
+
+```text
+Watch for Sampler annotations. When a new annotation arrives, acknowledge it, inspect the relevant code, make the fix, run the appropriate checks, and mark the annotation resolved with a short summary. Continue until I say stop.
+```
+
 ## Removal
 
 To remove Sampler:

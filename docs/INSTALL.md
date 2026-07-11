@@ -17,6 +17,38 @@ Full instructions: https://github.com/gabrieltmitchell/sampler/blob/main/AGENTS.
 
 The agent should add the package, wire up the startup call, and build Debug and Release.
 
+## Claude Code Skill
+
+Claude Code users can install Sampler's setup skill:
+
+```bash
+npx skills add gabrieltmitchell/sampler
+```
+
+Then run:
+
+```text
+/sampler
+```
+
+The skill detects your iOS app structure, adds the Swift package, wires `Sampler.start()`, and verifies Debug and Release builds.
+
+## MCP Live Sync
+
+If you want simulator annotations to go directly to your coding agent, configure the Sampler MCP server:
+
+```bash
+npx add-mcp "npx -y sampler-mcp server"
+```
+
+Or run the server manually:
+
+```bash
+npx -y sampler-mcp server
+```
+
+The server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button.
+
 ## Manual Xcode Install
 
 1. Open your app in Xcode.

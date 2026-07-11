@@ -117,6 +117,35 @@ final class AnnotationViewController: UIViewController {
         }
     }
 
+    func sendToAgent(using client: SamplerAgentClient) {
+        guard !annotations.isEmpty else {
+            showToast(title: "Add an Annotation First", iconName: "exclamationmark.bubble.fill")
+            return
+        }
+
+        showToast(title: "Sending to Agent...", iconName: "paperplane.fill")
+        let annotationsToSend = annotations
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                try await client.send(capture: capture, annotations: annotationsToSend)
+                await MainActor.run {
+                    showToast(title: "Sent to Agent", iconName: "checkmark.circle.fill")
+                    if clearsAnnotationsAfterSend {
+                        clearAnnotations()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    showToast(title: error.localizedDescription)
+                }
+            }
+        }
+    }
+
     private func configureViews() {
         overrideUserInterfaceStyle = overlayTheme.userInterfaceStyle
         view.backgroundColor = .clear

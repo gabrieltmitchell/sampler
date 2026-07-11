@@ -50,6 +50,37 @@ enum ExportBuilder {
         return try zipDirectory(baseURL)
     }
 
+    @MainActor
+    static func makeAgentSyncPayload(sessionID: String, capture: CapturedScreen, annotations: [Annotation]) throws -> Data {
+        let annotatedImage = makeAnnotatedScreenshot(capture: capture, annotations: annotations)
+        guard
+            let screenshotData = capture.screenshot.pngData(),
+            let annotatedData = annotatedImage.pngData()
+        else {
+            throw SamplerError.exportFailed
+        }
+
+        let payload = AgentSyncPayload(
+            sessionId: sessionID,
+            source: AgentSyncSource(
+                appName: capture.appName,
+                deviceName: capture.deviceName,
+                systemVersion: capture.systemVersion
+            ),
+            capture: makeExportPayload(capture: capture, annotations: annotations),
+            annotations: makeExportAnnotations(capture: capture, annotations: annotations),
+            markdown: makeMarkdown(capture: capture, annotations: annotations, includeSnippetLinks: false),
+            screenshotPngBase64: screenshotData.base64EncodedString(),
+            annotatedPngBase64: annotatedData.base64EncodedString(),
+            createdAt: capture.capturedAt
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(payload)
+    }
+
     private static func makeMarkdown(
         capture: CapturedScreen,
         annotations: [Annotation],
@@ -314,28 +345,36 @@ enum ExportBuilder {
     }
 
     private static func writeJSON(capture: CapturedScreen, annotations: [Annotation], to url: URL) throws {
-        let payload = ExportPayload(
+        let payload = makeExportPayload(capture: capture, annotations: annotations)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(payload).write(to: url, options: .atomic)
+    }
+
+    private static func makeExportPayload(capture: CapturedScreen, annotations: [Annotation]) -> ExportPayload {
+        ExportPayload(
             appName: capture.appName,
             deviceName: capture.deviceName,
             systemVersion: capture.systemVersion,
             screenBounds: RectSnapshot(capture.bounds),
             scale: capture.scale,
             capturedAt: capture.capturedAt,
-            annotations: annotations.map {
-                ExportAnnotation(
-                    id: $0.id,
-                    number: $0.number,
-                    comment: $0.comment,
-                    rect: $0.rect,
-                    normalizedRect: $0.rect.normalized(in: capture.bounds),
-                    matchedElements: $0.matchedElements
-                )
-            }
+            annotations: makeExportAnnotations(capture: capture, annotations: annotations)
         )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(payload).write(to: url, options: .atomic)
+    }
+
+    private static func makeExportAnnotations(capture: CapturedScreen, annotations: [Annotation]) -> [ExportAnnotation] {
+        annotations.map {
+            ExportAnnotation(
+                id: $0.id,
+                number: $0.number,
+                comment: $0.comment,
+                rect: $0.rect,
+                normalizedRect: $0.rect.normalized(in: capture.bounds),
+                matchedElements: $0.matchedElements
+            )
+        }
     }
 
     private static func zipDirectory(_ directoryURL: URL) throws -> URL {
@@ -391,5 +430,22 @@ private struct ExportAnnotation: Codable {
     let rect: RectSnapshot
     let normalizedRect: RectSnapshot
     let matchedElements: [AccessibilityElementSnapshot]
+}
+
+private struct AgentSyncPayload: Codable {
+    let sessionId: String
+    let source: AgentSyncSource
+    let capture: ExportPayload
+    let annotations: [ExportAnnotation]
+    let markdown: String
+    let screenshotPngBase64: String
+    let annotatedPngBase64: String
+    let createdAt: Date
+}
+
+private struct AgentSyncSource: Codable {
+    let appName: String
+    let deviceName: String
+    let systemVersion: String
 }
 #endif

@@ -76,6 +76,7 @@ enum SamplerError: LocalizedError {
     case noActiveWindowScene
     case screenCaptureFailed
     case exportFailed
+    case agentSyncFailed
 
     var errorDescription: String? {
         switch self {
@@ -85,6 +86,8 @@ enum SamplerError: LocalizedError {
             return "The current app screen could not be captured."
         case .exportFailed:
             return "The annotation export could not be created."
+        case .agentSyncFailed:
+            return "Sampler could not send annotations to the local agent."
         }
     }
 }

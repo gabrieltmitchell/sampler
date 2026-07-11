@@ -19,6 +19,44 @@ Add the Sampler visual feedback widget to my iOS app:
 Full instructions: https://github.com/gabrieltmitchell/sampler/blob/main/AGENTS.md
 ```
 
+### Claude Code Skill
+
+Claude Code users can install the Sampler skill:
+
+```bash
+npx skills add gabrieltmitchell/sampler
+```
+
+Then run:
+
+```text
+/sampler
+```
+
+The skill detects your iOS app structure, adds the Swift package, wires `Sampler.start()`, and verifies Debug and Release builds.
+
+## MCP Live Sync
+
+For simulator-based direct-to-agent feedback, configure the Sampler MCP server:
+
+```bash
+npx add-mcp "npx -y sampler-mcp server"
+```
+
+Or run it manually:
+
+```bash
+npx -y sampler-mcp server
+```
+
+When `sampler-mcp` is reachable at `http://localhost:4747`, Sampler running in the iOS Simulator shows a Send to Agent button in the annotation toolbar. Tap it to send the current annotations directly to MCP-aware agents.
+
+Useful agent prompt:
+
+```text
+Watch for Sampler annotations. When a new annotation arrives, acknowledge it, inspect the relevant code, make the fix, run the appropriate checks, and mark the annotation resolved with a short summary. Continue until I say stop.
+```
+
 ## Install Manually
 
 In Xcode, go to **File > Add Package Dependencies...** and add:

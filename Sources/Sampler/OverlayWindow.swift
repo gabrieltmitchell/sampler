@@ -48,10 +48,12 @@ final class OverlayWindow: UIWindow {
 
 final class OverlayRootViewController: UIViewController {
     weak var delegate: OverlayRootViewControllerDelegate?
+    var agentEndpoint: URL?
 
     private let widget = FloatingAnnotationWidget()
     private var annotationViewController: AnnotationViewController?
     private var messageLabel: UILabel?
+    private var agentClient: SamplerAgentClient?
     private var widgetCenter: CGPoint?
     private var collapsedWidgetCenter: CGPoint?
     private var selectedAnnotationColor: UIColor = .systemBlue
@@ -68,6 +70,7 @@ final class OverlayRootViewController: UIViewController {
         view.backgroundColor = .clear
         configureSettingsBackgroundTap()
         configureWidget()
+        configureAgentClient()
     }
 
     override func viewDidLayoutSubviews() {
@@ -182,6 +185,13 @@ final class OverlayRootViewController: UIViewController {
         widget.onShare = { [weak self] in
             self?.annotationViewController?.shareFullExport()
         }
+        widget.onSendToAgent = { [weak self] in
+            guard let self, let agentClient else {
+                self?.showTransientMessage("Start sampler-mcp to send annotations to your agent.")
+                return
+            }
+            annotationViewController?.sendToAgent(using: agentClient)
+        }
         widget.onSettingsOpen = { [weak self] in
             self?.openSettingsSheet()
         }
@@ -214,6 +224,21 @@ final class OverlayRootViewController: UIViewController {
 
         widget.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleWidgetPan(_:))))
         view.addSubview(widget)
+    }
+
+    private func configureAgentClient() {
+        guard let endpoint = agentEndpoint ?? SamplerAgentClient.defaultEndpoint else {
+            return
+        }
+
+        let client = SamplerAgentClient(endpoint: endpoint)
+        agentClient = client
+        Task { [weak self] in
+            let isReachable = await client.isReachable()
+            await MainActor.run {
+                self?.widget.setAgentSendAvailable(isReachable, animated: true)
+            }
+        }
     }
 
     private func configureSettingsBackgroundTap() {
@@ -390,7 +415,7 @@ final class FloatingAnnotationWidget: UIControl {
     }
 
     static let collapsedSize: CGFloat = 54
-    static let expandedSize = CGSize(width: 216, height: 54)
+    static let expandedSize = CGSize(width: 258, height: 54)
 
     static func settingsSize(in bounds: CGRect) -> CGSize {
         CGSize(
@@ -403,6 +428,7 @@ final class FloatingAnnotationWidget: UIControl {
     var onClose: (() -> Void)?
     var onCopy: (() -> Void)?
     var onShare: (() -> Void)?
+    var onSendToAgent: (() -> Void)?
     var onSettingsOpen: (() -> Void)?
     var onSettingsClose: (() -> Void)?
     var onHideUntilRestart: (() -> Void)?
@@ -441,6 +467,7 @@ final class FloatingAnnotationWidget: UIControl {
     private var copyFormatIndicatorDots: [UIView] = []
     private var colorButtons: [ColorOptionButton] = []
     private var clearAfterSendButton: AnimatedCheckboxButton?
+    private var sendToAgentButton: UIButton?
 
     override init(frame: CGRect) {
         super.init(frame: CGRect(origin: .zero, size: CGSize(width: Self.collapsedSize, height: Self.collapsedSize)))
@@ -513,12 +540,17 @@ final class FloatingAnnotationWidget: UIControl {
 
         let copy = makeButton(systemName: "doc.on.doc", pointSize: 13, imageSize: 22, action: #selector(copyTapped))
         let share = makeButton(systemName: "square.and.arrow.up", action: #selector(shareTapped))
+        let sendToAgent = makeButton(systemName: "paperplane.fill", pointSize: 14, imageSize: 22, action: #selector(sendToAgentTapped))
+        sendToAgent.accessibilityLabel = "Send to Agent"
+        sendToAgent.isHidden = true
+        sendToAgent.alpha = 0
+        self.sendToAgentButton = sendToAgent
         let settings = makeButton(systemName: "gearshape", action: #selector(settingsTapped))
         let divider = UIView()
         divider.translatesAutoresizingMaskIntoConstraints = false
         dividers.append(divider)
         let close = makeButton(systemName: "xmark", pointSize: 14, action: #selector(closeTapped))
-        [copy, share, settings, divider, close].forEach(toolbarView.addArrangedSubview)
+        [copy, share, sendToAgent, settings, divider, close].forEach(toolbarView.addArrangedSubview)
 
         configureSettingsView()
 
@@ -540,6 +572,35 @@ final class FloatingAnnotationWidget: UIControl {
 
         feedbackGenerator.prepare()
         applyTheme()
+    }
+
+    func setAgentSendAvailable(_ isAvailable: Bool, animated: Bool) {
+        guard let sendToAgentButton else {
+            return
+        }
+
+        let changes = {
+            sendToAgentButton.isHidden = !isAvailable
+            sendToAgentButton.alpha = isAvailable ? 1 : 0
+            self.layoutIfNeeded()
+        }
+
+        guard animated else {
+            changes()
+            return
+        }
+
+        if isAvailable {
+            sendToAgentButton.alpha = 0
+            sendToAgentButton.isHidden = false
+        }
+
+        UIView.animate(
+            withDuration: 0.18,
+            delay: 0,
+            options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseInOut],
+            animations: changes
+        )
     }
 
     private func makeButton(
@@ -1180,6 +1241,11 @@ final class FloatingAnnotationWidget: UIControl {
     @objc private func shareTapped() {
         triggerHaptic()
         onShare?()
+    }
+
+    @objc private func sendToAgentTapped() {
+        triggerHaptic()
+        onSendToAgent?()
     }
 
     private func triggerHaptic() {
