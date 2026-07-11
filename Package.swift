@@ -15,7 +15,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Sampler"
+            name: "Sampler",
+            resources: [
+                .process("Resources")
+            ]
         )
     ]
 )

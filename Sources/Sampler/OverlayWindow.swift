@@ -52,8 +52,9 @@ final class OverlayRootViewController: UIViewController {
 
     private let widget = FloatingAnnotationWidget()
     private var annotationViewController: AnnotationViewController?
-    private var messageLabel: UILabel?
+    private var messageView: UIView?
     private var agentClient: SamplerAgentClient?
+    private var isAgentSendAvailable = false
     private var widgetCenter: CGPoint?
     private var collapsedWidgetCenter: CGPoint?
     private var selectedAnnotationColor: UIColor = .systemBlue
@@ -133,35 +134,37 @@ final class OverlayRootViewController: UIViewController {
     }
 
     func showTransientMessage(_ message: String) {
-        messageLabel?.removeFromSuperview()
+        messageView?.removeFromSuperview()
 
-        let label = UILabel()
-        label.text = message
-        label.textColor = selectedTheme.primaryText
-        label.font = .preferredFont(forTextStyle: .footnote)
-        label.numberOfLines = 0
-        label.textAlignment = .center
-        label.backgroundColor = selectedTheme.toastBackground
-        label.layer.cornerRadius = 14
-        label.layer.masksToBounds = true
-        label.alpha = 0
-        view.addSubview(label)
-        messageLabel = label
+        let toastView = ToastView(title: message, iconName: "info.circle.fill", overlayTheme: selectedTheme)
+        toastView.alpha = 0
+        toastView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(toastView)
+        messageView = toastView
 
-        label.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            label.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.82)
+            toastView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            toastView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            toastView.heightAnchor.constraint(greaterThanOrEqualToConstant: 42),
+            toastView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.86)
         ])
 
-        UIView.animate(withDuration: 0.18) {
-            label.alpha = 1
+        toastView.transform = CGAffineTransform(translationX: 0, y: -64)
+        UIView.animate(
+            withDuration: 0.28,
+            delay: 0,
+            usingSpringWithDamping: 0.86,
+            initialSpringVelocity: 0.25,
+            options: [.allowUserInteraction]
+        ) {
+            toastView.alpha = 1
+            toastView.transform = .identity
         } completion: { _ in
-            UIView.animate(withDuration: 0.18, delay: 2.2, options: []) {
-                label.alpha = 0
+            UIView.animate(withDuration: 0.18, delay: 1.4, options: [.curveEaseIn]) {
+                toastView.alpha = 0
+                toastView.transform = CGAffineTransform(translationX: 0, y: -24)
             } completion: { _ in
-                label.removeFromSuperview()
+                toastView.removeFromSuperview()
             }
         }
     }
@@ -186,8 +189,8 @@ final class OverlayRootViewController: UIViewController {
             self?.annotationViewController?.shareFullExport()
         }
         widget.onSendToAgent = { [weak self] in
-            guard let self, let agentClient else {
-                self?.showTransientMessage("Start sampler-mcp to send annotations to your agent.")
+            guard let self, let agentClient, isAgentSendAvailable else {
+                self?.showTransientMessage("MCP not set up")
                 return
             }
             annotationViewController?.sendToAgent(using: agentClient)
@@ -236,6 +239,7 @@ final class OverlayRootViewController: UIViewController {
         Task { [weak self] in
             let isReachable = await client.isReachable()
             await MainActor.run {
+                self?.isAgentSendAvailable = isReachable
                 self?.widget.setAgentSendAvailable(isReachable, animated: true)
             }
         }
@@ -449,7 +453,10 @@ final class FloatingAnnotationWidget: UIControl {
         }
     }
 
-    private let iconView = UIImageView(image: UIImage(systemName: "lasso.badge.sparkles"))
+    private let iconView = UIImageView(
+        image: UIImage(named: "Sampler_Logo", in: .module, compatibleWith: nil)?
+            .withRenderingMode(.alwaysTemplate)
+    )
     private let toolbarView = UIStackView()
     private let settingsView = UIView()
     private let clipboardHelpView = UIView()
@@ -542,8 +549,8 @@ final class FloatingAnnotationWidget: UIControl {
         let share = makeButton(systemName: "square.and.arrow.up", action: #selector(shareTapped))
         let sendToAgent = makeButton(systemName: "paperplane.fill", pointSize: 14, imageSize: 22, action: #selector(sendToAgentTapped))
         sendToAgent.accessibilityLabel = "Send to Agent"
-        sendToAgent.isHidden = true
-        sendToAgent.alpha = 0
+        sendToAgent.accessibilityHint = "Starts MCP setup help when sampler-mcp is not reachable"
+        sendToAgent.alpha = 0.34
         self.sendToAgentButton = sendToAgent
         let settings = makeButton(systemName: "gearshape", action: #selector(settingsTapped))
         let divider = UIView()
@@ -580,19 +587,13 @@ final class FloatingAnnotationWidget: UIControl {
         }
 
         let changes = {
-            sendToAgentButton.isHidden = !isAvailable
-            sendToAgentButton.alpha = isAvailable ? 1 : 0
+            sendToAgentButton.alpha = isAvailable ? 1 : 0.34
             self.layoutIfNeeded()
         }
 
         guard animated else {
             changes()
             return
-        }
-
-        if isAvailable {
-            sendToAgentButton.alpha = 0
-            sendToAgentButton.isHidden = false
         }
 
         UIView.animate(
