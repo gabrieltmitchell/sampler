@@ -8,13 +8,14 @@ import { AnnotationHub, startHttpServer } from "./http.js";
 import { startMcpServer } from "./mcp.js";
 import { SamplerStore } from "./store.js";
 import type { AutoDispatchStatus } from "./types.js";
+import { packageVersion } from "./version.js";
 
 const program = new Command();
 
 program
   .name("sampler-mcp")
   .description("MCP server for Sampler iOS visual feedback annotations")
-  .version("0.1.3");
+  .version(packageVersion());
 
 program
   .command("server")

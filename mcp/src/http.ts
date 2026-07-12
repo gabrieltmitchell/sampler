@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { AutoDispatchStatus, SamplerAnnotationPayload, SamplerAnnotationStatus } from "./types.js";
 import { SamplerStore } from "./store.js";
+import { packageVersion } from "./version.js";
 
 type AnnotationListener = () => void;
 
@@ -86,13 +87,14 @@ async function routeRequest(
   }
 
   if (request.method === "GET" && url.pathname === "/health") {
-    writeJson(response, 200, { ok: true, service: "sampler-mcp" });
+    writeJson(response, 200, { ok: true, service: "sampler-mcp", version: packageVersion() });
     return;
   }
 
   if (request.method === "GET" && url.pathname === "/status") {
     writeJson(response, 200, {
       ok: true,
+      version: packageVersion(),
       sessions: store.listSessions().length,
       pending: store.getPending().length,
       store: store.rootDir,

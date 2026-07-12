@@ -4,11 +4,12 @@ import { z } from "zod";
 import { AnnotationHub } from "./http.js";
 import { SamplerStore } from "./store.js";
 import type { StoredAnnotationWithSession } from "./types.js";
+import { packageVersion } from "./version.js";
 
 export async function startMcpServer(store: SamplerStore, hub: AnnotationHub): Promise<void> {
   const server = new McpServer({
     name: "sampler-mcp",
-    version: "0.1.3"
+    version: packageVersion()
   });
 
   server.tool("sampler_list_sessions", "List Sampler annotation sessions", {}, async () => {
