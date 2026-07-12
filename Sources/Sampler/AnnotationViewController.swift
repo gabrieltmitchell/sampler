@@ -836,6 +836,13 @@ final class AnnotationViewController: UIViewController {
             return "Agent logs not writable."
         case .agentStalled:
             return "Agent started but has not responded."
+        case .agentReconnecting:
+            if let retryCount = autoDispatch.retryCount {
+                return "Agent reconnecting... retry \(retryCount)"
+            }
+            return "Agent reconnecting..."
+        case .agentNetworkError:
+            return "Agent network connection failed."
         case .lastRunFailed:
             return "Agent failed to start."
         case .disabled:

@@ -105,6 +105,8 @@ async function routeRequest(
         lastError: null,
         lastLogPath: null,
         lastLogEmpty: null,
+        lastOutput: null,
+        retryCount: null,
         pid: null,
         command: null,
         updatedAt: new Date().toISOString()

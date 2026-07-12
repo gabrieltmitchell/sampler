@@ -10,6 +10,8 @@ export type AutoDispatchState =
   | "agent_starting"
   | "agent_started"
   | "agent_stalled"
+  | "agent_reconnecting"
+  | "agent_network_error"
   | "running"
   | "agent_completed"
   | "last_run_failed";
@@ -81,6 +83,8 @@ export interface AutoDispatchStatus {
   lastError: string | null;
   lastLogPath: string | null;
   lastLogEmpty: boolean | null;
+  lastOutput: string | null;
+  retryCount: number | null;
   pid: number | null;
   command: string | null;
   updatedAt: string;

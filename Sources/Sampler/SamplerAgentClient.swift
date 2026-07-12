@@ -107,6 +107,8 @@ struct AgentServerStatus: Decodable {
         let lastError: String?
         let lastLogPath: String?
         let lastLogEmpty: Bool?
+        let lastOutput: String?
+        let retryCount: Int?
 
         enum State: String, Decodable {
             case ready
@@ -118,6 +120,8 @@ struct AgentServerStatus: Decodable {
             case agentStarting = "agent_starting"
             case agentStarted = "agent_started"
             case agentStalled = "agent_stalled"
+            case agentReconnecting = "agent_reconnecting"
+            case agentNetworkError = "agent_network_error"
             case running
             case agentCompleted = "agent_completed"
             case lastRunFailed = "last_run_failed"

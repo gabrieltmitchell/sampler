@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name("sampler-mcp")
   .description("MCP server for Sampler iOS visual feedback annotations")
-  .version("0.1.2");
+  .version("0.1.3");
 
 program
   .command("server")
@@ -45,6 +45,8 @@ program
       lastError: null,
       lastLogPath: null,
       lastLogEmpty: null,
+      lastOutput: null,
+      retryCount: null,
       pid: null,
       command: null,
       updatedAt: new Date().toISOString()

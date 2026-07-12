@@ -8,7 +8,7 @@ import type { StoredAnnotationWithSession } from "./types.js";
 export async function startMcpServer(store: SamplerStore, hub: AnnotationHub): Promise<void> {
   const server = new McpServer({
     name: "sampler-mcp",
-    version: "0.1.2"
+    version: "0.1.3"
   });
 
   server.tool("sampler_list_sessions", "List Sampler annotation sessions", {}, async () => {

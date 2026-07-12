@@ -77,7 +77,7 @@ export class SamplerDispatcher {
 
     if (this.isRunning) {
       this.rerunRequested = true;
-      if (this.statusValue.state !== "agent_stalled" && this.statusValue.state !== "last_run_failed") {
+      if (!["agent_stalled", "agent_reconnecting", "agent_network_error", "last_run_failed"].includes(this.statusValue.state)) {
         this.setStatus("queued", true, `${annotations.length} annotation(s) queued while an agent is running`);
       }
       return;
@@ -129,8 +129,24 @@ export class SamplerDispatcher {
     let outputBuffer = "";
     const markOutput = (chunk: Buffer) => {
       sawOutput = true;
-      this.setStatus("running", true, "Agent produced output", { lastLogEmpty: false });
-      outputBuffer = (outputBuffer + chunk.toString("utf8")).slice(-8000);
+      const output = chunk.toString("utf8");
+      outputBuffer = (outputBuffer + output).slice(-8000);
+      const retryCount = extractRetryCount(outputBuffer);
+      if (isReconnectOutput(outputBuffer)) {
+        this.setStatus("agent_reconnecting", true, "Agent reconnecting to Cursor service", {
+          lastLogEmpty: false,
+          lastOutput: tailLine(outputBuffer),
+          retryCount
+        });
+        this.options.store.updateProgressForAnnotations(annotationIds, retryCount ? `Agent reconnecting... retry ${retryCount}` : "Agent reconnecting...");
+        this.options.hub.notify();
+        return;
+      }
+      this.setStatus("running", true, "Agent produced output", {
+        lastLogEmpty: false,
+        lastOutput: tailLine(outputBuffer),
+        retryCount
+      });
     };
     child.stdout.on("data", markOutput);
     child.stderr.on("data", markOutput);
@@ -162,21 +178,36 @@ export class SamplerDispatcher {
       logStream.write(`\nSampler auto-dispatch exited with code=${code ?? "null"} signal=${signal ?? "null"}\n`);
       logStream.end();
       const authError = outputBuffer.includes("Authentication required") || outputBuffer.includes("agent login");
+      const networkError = isReconnectOutput(outputBuffer);
       if (authError) {
         this.setStatus("auth_required", false, "Cursor CLI login required. Run cursor-agent login.", {
           lastLogPath: logPath,
-          lastLogEmpty: !sawOutput
+          lastLogEmpty: !sawOutput,
+          lastOutput: tailLine(outputBuffer),
+          retryCount: extractRetryCount(outputBuffer)
         });
         this.failAnnotations(annotations, "Cursor CLI login required.");
+      } else if (networkError && code !== 0) {
+        this.setStatus("agent_network_error", false, "Agent lost connection to Cursor service", {
+          lastLogPath: logPath,
+          lastLogEmpty: !sawOutput,
+          lastOutput: tailLine(outputBuffer),
+          retryCount: extractRetryCount(outputBuffer)
+        });
+        this.failAnnotations(annotations, "Agent network connection failed.");
       } else if (code === 0) {
         this.setStatus("agent_completed", true, "Agent run completed", {
           lastLogPath: logPath,
-          lastLogEmpty: !sawOutput
+          lastLogEmpty: !sawOutput,
+          lastOutput: tailLine(outputBuffer),
+          retryCount: extractRetryCount(outputBuffer)
         });
       } else {
         this.setStatus("last_run_failed", false, `Agent exited with code=${code ?? "null"} signal=${signal ?? "null"}`, {
           lastLogPath: logPath,
-          lastLogEmpty: !sawOutput
+          lastLogEmpty: !sawOutput,
+          lastOutput: tailLine(outputBuffer),
+          retryCount: extractRetryCount(outputBuffer)
         });
         this.failAnnotations(annotations, "Agent failed. See dispatch log.");
       }
@@ -259,6 +290,8 @@ function makeStatus(input: {
     lastError: input.healthy ? null : input.reason,
     lastLogPath: null,
     lastLogEmpty: null,
+    lastOutput: null,
+    retryCount: null,
     pid: null,
     command: null,
     updatedAt: new Date().toISOString()
@@ -296,4 +329,26 @@ Keep the resolution short because it is shown inside the iOS widget toast.`;
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function isReconnectOutput(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return normalized.includes("connection lost")
+    || normalized.includes("reconnecting")
+    || normalized.includes("retry attempt")
+    || normalized.includes("agentn.global.api5.cursor.sh");
+}
+
+function extractRetryCount(output: string): number | null {
+  const matches = [...output.matchAll(/retry attempt\s+(\d+)/gi)];
+  const latest = matches.at(-1)?.[1];
+  return latest ? Number.parseInt(latest, 10) : null;
+}
+
+function tailLine(output: string): string | null {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.at(-1) ?? null;
 }
