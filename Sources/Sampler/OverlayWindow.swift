@@ -666,7 +666,7 @@ final class FloatingAnnotationWidget: UIControl {
         primaryLabels.append(titleLabel)
 
         let versionLabel = UILabel()
-        versionLabel.text = "V0.1"
+        versionLabel.text = "V\(Sampler.version)"
         versionLabel.font = .monospacedSystemFont(ofSize: 12, weight: .semibold)
         versionLabel.translatesAutoresizingMaskIntoConstraints = false
         settingsView.addSubview(versionLabel)

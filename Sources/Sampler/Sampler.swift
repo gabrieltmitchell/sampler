@@ -5,6 +5,8 @@ import Foundation
 
 @MainActor
 public enum Sampler {
+    public static let version = "0.2.0"
+
 #if DEBUG && os(iOS)
     private static var controller: SamplerController?
     private static var isHiddenUntilRestart = false
