@@ -195,6 +195,27 @@ export class SamplerStore {
     ).all(sessionId) as StoredAnnotationStatus[];
   }
 
+  getStatusesByIds(ids: string[]): StoredAnnotationStatus[] {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const placeholders = ids.map(() => "?").join(", ");
+    return this.db.prepare(
+      `select id,
+              session_id as sessionId,
+              number,
+              comment,
+              status,
+              progress,
+              resolution,
+              updated_at as updatedAt,
+              resolved_at as resolvedAt
+       from annotations
+       where id in (${placeholders})`
+    ).all(...ids) as StoredAnnotationStatus[];
+  }
+
   updateStatus(id: string, status: SamplerAnnotationStatus, resolution?: string): StoredAnnotation | undefined {
     const now = new Date().toISOString();
     this.db.prepare(

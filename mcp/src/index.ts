@@ -49,6 +49,7 @@ program
       retryCount: null,
       pid: null,
       command: null,
+      activeAnnotationIds: [],
       updatedAt: new Date().toISOString()
     });
 

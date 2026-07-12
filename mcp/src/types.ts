@@ -87,5 +87,6 @@ export interface AutoDispatchStatus {
   retryCount: number | null;
   pid: number | null;
   command: string | null;
+  activeAnnotationIds: string[];
   updatedAt: string;
 }

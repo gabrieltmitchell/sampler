@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AnnotationHub } from "./http.js";
@@ -17,6 +17,10 @@ export class SamplerDispatcher {
   private rerunRequested = false;
   private unsubscribe?: () => void;
   private statusValue: AutoDispatchStatus;
+  private activeChild?: ChildProcess;
+  private ignoredChildren = new WeakSet<ChildProcess>();
+  private activeAnnotationIds: string[] = [];
+  private publishingInternalStatus = false;
 
   constructor(private readonly options: SamplerDispatcherOptions) {
     this.statusValue = makeStatus({
@@ -51,22 +55,29 @@ export class SamplerDispatcher {
   stop(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.stopActiveChild("auto-dispatch stopped");
     this.setStatus("disabled", true, "auto-dispatch stopped");
   }
 
   status(): AutoDispatchStatus {
     return {
       ...this.statusValue,
-      lastLogEmpty: this.statusValue.lastLogPath ? this.statusValue.lastLogEmpty : null
+      lastLogEmpty: this.statusValue.lastLogPath ? this.statusValue.lastLogEmpty : null,
+      activeAnnotationIds: this.activeAnnotationIds
     };
   }
 
   retry(): void {
+    this.stopActiveChild("retry requested");
     this.rerunRequested = true;
     this.dispatchIfNeeded();
   }
 
   private dispatchIfNeeded(): void {
+    if (this.publishingInternalStatus) {
+      return;
+    }
+
     const annotations = this.options.store.getDispatchCandidates();
     if (annotations.length === 0) {
       if (!this.isRunning && this.statusValue.state !== "disabled") {
@@ -76,6 +87,12 @@ export class SamplerDispatcher {
     }
 
     if (this.isRunning) {
+      if (this.activeChild && this.isTerminalBlockedState()) {
+        this.stopActiveChild(`replacing stale ${this.statusValue.state} dispatch`);
+        this.rerunRequested = true;
+        this.dispatchIfNeeded();
+        return;
+      }
       this.rerunRequested = true;
       if (!["agent_stalled", "agent_reconnecting", "agent_network_error", "last_run_failed"].includes(this.statusValue.state)) {
         this.setStatus("queued", true, `${annotations.length} annotation(s) queued while an agent is running`);
@@ -101,11 +118,7 @@ export class SamplerDispatcher {
     }
 
     const annotationIds = annotations.map((annotation) => annotation.id);
-    for (const annotation of annotations) {
-      this.options.store.updateStatusAndProgress(annotation.id, "acknowledged", "Starting agent...");
-    }
-    this.options.hub.notify();
-
+    this.activeAnnotationIds = annotationIds;
     const logStream = createWriteStream(logPath, { flags: "a" });
     const prompt = buildDispatchPrompt(this.options.baseUrl, annotations);
     const args = ["-p", prompt, "--output-format", "text"];
@@ -114,12 +127,17 @@ export class SamplerDispatcher {
       lastLogEmpty: true,
       command: `cursor-agent ${args.map(shellQuote).join(" ")}`
     });
+    for (const annotation of annotations) {
+      this.options.store.updateStatusAndProgress(annotation.id, "acknowledged", "Starting agent...");
+    }
+    this.notifyHub();
 
     const child = spawn("cursor-agent", args, {
       cwd: this.options.projectPath,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
+    this.activeChild = child;
 
     this.setStatus("agent_started", true, "Agent process started", { pid: child.pid ?? null });
     console.error(`Sampler auto-dispatch started in ${this.options.projectPath}`);
@@ -139,7 +157,7 @@ export class SamplerDispatcher {
           retryCount
         });
         this.options.store.updateProgressForAnnotations(annotationIds, retryCount ? `Agent reconnecting... retry ${retryCount}` : "Agent reconnecting...");
-        this.options.hub.notify();
+        this.notifyHub();
         return;
       }
       this.setStatus("running", true, "Agent produced output", {
@@ -150,22 +168,92 @@ export class SamplerDispatcher {
     };
     child.stdout.on("data", markOutput);
     child.stderr.on("data", markOutput);
-    child.stdout.pipe(logStream);
-    child.stderr.pipe(logStream);
+    child.stdout.pipe(logStream, { end: false });
+    child.stderr.pipe(logStream, { end: false });
 
-    const stallTimeout = setTimeout(() => {
-      if (this.isRunning && !sawOutput) {
+    // cursor-agent in --print text mode is usually silent until it finishes,
+    // so stdout silence alone is not evidence of a stall. Annotation PATCHes
+    // from the agent (progress/status updates) count as liveness. Only kill
+    // after a long window with neither output nor annotation activity.
+    const softStallMs = envTimeoutMs("SAMPLER_DISPATCH_SOFT_STALL_MS", 20_000);
+    const hardStallMs = envTimeoutMs("SAMPLER_DISPATCH_HARD_STALL_MS", 300_000);
+    const spawnedAt = Date.now();
+    let softStallNotified = false;
+    let sawAnnotationActivity = false;
+
+    const hasAnnotationActivity = (): boolean => {
+      const statuses = this.options.store.getStatusesByIds(annotationIds);
+      return statuses.some((status) =>
+        status.status === "resolved"
+        || status.status === "dismissed"
+        || (status.progress !== null && !isServerProgress(status.progress))
+      );
+    };
+
+    const livenessInterval = setInterval(() => {
+      if (!this.isRunning || this.activeChild !== child) {
+        clearInterval(livenessInterval);
+        return;
+      }
+
+      if (hasAnnotationActivity()) {
+        if (!sawAnnotationActivity) {
+          sawAnnotationActivity = true;
+          this.setStatus("running", true, "Agent is reporting progress on annotations", {
+            lastLogEmpty: !sawOutput
+          });
+        }
+        return;
+      }
+
+      if (sawOutput || sawAnnotationActivity) {
+        return;
+      }
+
+      const elapsed = Date.now() - spawnedAt;
+      if (elapsed >= hardStallMs) {
+        clearInterval(livenessInterval);
         this.setStatus("agent_stalled", false, "Agent started but has not responded", {
           lastLogPath: logPath,
           lastLogEmpty: true
         });
         this.options.store.updateProgressForAnnotations(annotationIds, "Agent started but has not responded.");
-        this.options.hub.notify();
+        this.stopActiveChild("agent produced no output or progress before hard stall timeout");
+        this.notifyHub();
+        if (this.rerunRequested) {
+          this.dispatchIfNeeded();
+        }
+      } else if (elapsed >= softStallMs && !softStallNotified) {
+        softStallNotified = true;
+        this.setStatus("agent_started", true, "Agent is working; no output yet (normal while editing and building)", {
+          lastLogPath: logPath,
+          lastLogEmpty: true
+        });
+        this.options.store.updateProgressForAnnotations(annotationIds, "Agent is working...");
+        this.notifyHub();
       }
-    }, 15_000);
+    }, 5_000);
+
+    const reconnectTimeout = setTimeout(() => {
+      if (this.isRunning && this.activeChild === child && this.statusValue.state === "agent_reconnecting") {
+        this.setStatus("agent_network_error", false, "Agent is still reconnecting to Cursor service", {
+          lastLogPath: logPath,
+          lastLogEmpty: false,
+          lastOutput: tailLine(outputBuffer),
+          retryCount: extractRetryCount(outputBuffer)
+        });
+        this.options.store.updateProgressForAnnotations(annotationIds, "Agent network connection failed.");
+        this.stopActiveChild("agent reconnect timed out");
+        this.notifyHub();
+        if (this.rerunRequested) {
+          this.dispatchIfNeeded();
+        }
+      }
+    }, 60_000);
 
     child.once("error", (error) => {
-      clearTimeout(stallTimeout);
+      clearInterval(livenessInterval);
+      clearTimeout(reconnectTimeout);
       logStream.write(`\nSampler auto-dispatch failed to start: ${error.message}\n`);
       logStream.end();
       this.setStatus("last_run_failed", false, error.message, { lastLogPath: logPath, lastLogEmpty: !sawOutput });
@@ -174,9 +262,16 @@ export class SamplerDispatcher {
     });
 
     child.once("close", (code, signal) => {
-      clearTimeout(stallTimeout);
+      clearInterval(livenessInterval);
+      clearTimeout(reconnectTimeout);
       logStream.write(`\nSampler auto-dispatch exited with code=${code ?? "null"} signal=${signal ?? "null"}\n`);
       logStream.end();
+      if (this.ignoredChildren.has(child)) {
+        return;
+      }
+      if (this.activeChild === child) {
+        this.activeChild = undefined;
+      }
       const authError = outputBuffer.includes("Authentication required") || outputBuffer.includes("agent login");
       const networkError = isReconnectOutput(outputBuffer);
       if (authError) {
@@ -217,14 +312,52 @@ export class SamplerDispatcher {
 
   private finishRun(): void {
     this.isRunning = false;
+    this.activeChild = undefined;
+    this.activeAnnotationIds = [];
     if (this.rerunRequested && this.options.store.getDispatchCandidates().length > 0) {
       this.dispatchIfNeeded();
     }
   }
 
+  private stopActiveChild(reason: string): void {
+    const child = this.activeChild;
+    this.isRunning = false;
+    this.activeChild = undefined;
+    this.activeAnnotationIds = [];
+
+    if (!child || child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+
+    this.ignoredChildren.add(child);
+    console.error(`Sampler auto-dispatch stopping pid ${child.pid ?? "unknown"}: ${reason}`);
+    child.kill("SIGTERM");
+    setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+      }
+    }, 3000);
+  }
+
+  private isTerminalBlockedState(): boolean {
+    return this.statusValue.state === "agent_stalled"
+      || this.statusValue.state === "agent_network_error"
+      || this.statusValue.state === "last_run_failed"
+      || this.statusValue.state === "auth_required";
+  }
+
   private failAnnotations(annotations: StoredAnnotationWithSession[], progress: string): void {
     this.options.store.updateProgressForAnnotations(annotations.map((annotation) => annotation.id), progress);
-    this.options.hub.notify();
+    this.notifyHub();
+  }
+
+  private notifyHub(): void {
+    this.publishingInternalStatus = true;
+    try {
+      this.options.hub.notify();
+    } finally {
+      this.publishingInternalStatus = false;
+    }
   }
 
   private createLogPath(): string {
@@ -294,6 +427,7 @@ function makeStatus(input: {
     retryCount: null,
     pid: null,
     command: null,
+    activeAnnotationIds: [],
     updatedAt: new Date().toISOString()
   };
 }
@@ -329,6 +463,30 @@ Keep the resolution short because it is shown inside the iOS widget toast.`;
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function envTimeoutMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const SERVER_PROGRESS_VALUES = new Set([
+  "Starting agent...",
+  "Agent is working...",
+  "Agent started but has not responded.",
+  "Agent network connection failed.",
+  "Cursor CLI login required.",
+  "Agent failed to start.",
+  "Agent failed. See dispatch log.",
+  "Agent logs are not writable."
+]);
+
+function isServerProgress(progress: string): boolean {
+  return SERVER_PROGRESS_VALUES.has(progress) || progress.startsWith("Agent reconnecting...");
 }
 
 function isReconnectOutput(output: string): boolean {
