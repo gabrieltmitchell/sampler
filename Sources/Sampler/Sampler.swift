@@ -8,6 +8,8 @@ public enum Sampler {
 #if DEBUG && os(iOS)
     private static var controller: SamplerController?
     private static var isHiddenUntilRestart = false
+    private static var pendingEndpoint: URL?
+    private static var sceneActivationObserver: NSObjectProtocol?
 
     public static func start(in windowScene: UIWindowScene? = nil, endpoint: URL? = nil) {
         guard !isHiddenUntilRestart, controller == nil else {
@@ -15,13 +17,15 @@ public enum Sampler {
         }
 
         guard let scene = windowScene ?? UIApplication.shared.activeWindowScene else {
-            assertionFailure(SamplerError.noActiveWindowScene.localizedDescription)
+            scheduleStartWhenSceneActivates(endpoint: endpoint)
             return
         }
 
-        let newController = SamplerController(windowScene: scene, endpoint: endpoint)
-        controller = newController
-        newController.start()
+        start(in: scene, endpoint: endpoint)
+    }
+
+    public static func startOnce(endpoint: URL? = nil) {
+        start(in: nil, endpoint: endpoint)
     }
 
     public static func start(endpoint: URL) {
@@ -29,6 +33,8 @@ public enum Sampler {
     }
 
     public static func stop() {
+        removeSceneActivationObserver()
+        pendingEndpoint = nil
         controller?.stop()
         controller = nil
     }
@@ -37,13 +43,59 @@ public enum Sampler {
         isHiddenUntilRestart = true
         stop()
     }
+
+    private static func start(in windowScene: UIWindowScene, endpoint: URL?) {
+        guard !isHiddenUntilRestart, controller == nil else {
+            return
+        }
+
+        removeSceneActivationObserver()
+        pendingEndpoint = nil
+
+        let newController = SamplerController(windowScene: windowScene, endpoint: endpoint)
+        controller = newController
+        newController.start()
+    }
+
+    private static func scheduleStartWhenSceneActivates(endpoint: URL?) {
+        pendingEndpoint = endpoint
+
+        guard sceneActivationObserver == nil else {
+            return
+        }
+
+        sceneActivationObserver = NotificationCenter.default.addObserver(
+            forName: UIScene.didActivateNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            Task { @MainActor in
+                guard let scene = notification.object as? UIWindowScene ?? UIApplication.shared.activeWindowScene else {
+                    return
+                }
+                start(in: scene, endpoint: pendingEndpoint)
+            }
+        }
+    }
+
+    private static func removeSceneActivationObserver() {
+        guard let sceneActivationObserver else {
+            return
+        }
+        NotificationCenter.default.removeObserver(sceneActivationObserver)
+        self.sceneActivationObserver = nil
+    }
 #else
     #if os(iOS)
     public static func start(in windowScene: UIWindowScene? = nil, endpoint: URL? = nil) {}
 
+    public static func startOnce(endpoint: URL? = nil) {}
+
     public static func start(endpoint: URL) {}
     #else
     public static func start() {}
+
+    public static func startOnce() {}
     #endif
 
     public static func stop() {}

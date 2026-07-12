@@ -754,10 +754,18 @@ final class AnnotationViewController: UIViewController {
         while !Task.isCancelled, Date() < deadline {
             do {
                 try await Task.sleep(nanoseconds: 2_500_000_000)
-                let statuses = try await client.fetchStatuses()
+                async let fetchedStatuses = client.fetchStatuses()
+                async let fetchedServerStatus = client.fetchServerStatus()
+                let statuses = try await fetchedStatuses
                     .filter { annotationIDs.contains($0.id) }
+                let serverStatus = try? await fetchedServerStatus
 
                 guard !statuses.isEmpty else {
+                    if let serverStatusTitle = statusTitle(for: serverStatus) {
+                        await MainActor.run {
+                            updateAgentStatusToast(title: serverStatusTitle, state: .working)
+                        }
+                    }
                     continue
                 }
 
@@ -779,7 +787,7 @@ final class AnnotationViewController: UIViewController {
                     return
                 }
 
-                let title = statusTitle(for: statuses)
+                let title = statusTitle(for: statuses, serverStatus: serverStatus)
                 await MainActor.run {
                     updateAgentStatusToast(title: title, state: .working)
                 }
@@ -798,9 +806,13 @@ final class AnnotationViewController: UIViewController {
         }
     }
 
-    private func statusTitle(for statuses: [AgentAnnotationStatus]) -> String {
+    private func statusTitle(for statuses: [AgentAnnotationStatus], serverStatus: AgentServerStatus?) -> String {
         if let progress = statuses.compactMap(\.progress).firstNonEmpty {
             return progress
+        }
+
+        if let title = statusTitle(for: serverStatus) {
+            return title
         }
 
         if statuses.contains(where: { $0.status == .acknowledged }) {
@@ -808,6 +820,29 @@ final class AnnotationViewController: UIViewController {
         }
 
         return "Waiting for agent..."
+    }
+
+    private func statusTitle(for serverStatus: AgentServerStatus?) -> String? {
+        guard let autoDispatch = serverStatus?.autoDispatch else {
+            return nil
+        }
+
+        switch autoDispatch.state {
+        case .authRequired:
+            return "Cursor CLI login required."
+        case .missingCursorAgent:
+            return "Cursor CLI missing."
+        case .logsNotWritable:
+            return "Agent logs not writable."
+        case .agentStalled:
+            return "Agent started but has not responded."
+        case .lastRunFailed:
+            return "Agent failed to start."
+        case .disabled:
+            return "MCP connected; auto-dispatch disabled."
+        default:
+            return nil
+        }
     }
 
     private func showAgentStatusToast(title: String, state: AgentStatusToastView.State) {

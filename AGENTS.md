@@ -26,10 +26,10 @@ Add Sampler so the app shows a local visual feedback widget in Debug builds. Sam
 
 ## Install Steps
 
-1. Add the Swift package dependency `https://github.com/gabrieltmitchell/sampler` from branch `main` to the app.
+1. Add the Swift package dependency `https://github.com/gabrieltmitchell/sampler` from version `0.1.2` to the app.
 2. Link the `Sampler` product to the app target, not a test target or extension target.
 3. Import `Sampler`.
-4. Call `Sampler.start()` once when the main app UI is available.
+4. Call `Sampler.startOnce()` once after the root SwiftUI view appears, or `Sampler.start(in:)` from a UIKit scene.
 5. Build the app for Debug and Release.
 
 ## SwiftUI Apps
@@ -46,14 +46,14 @@ struct MyApp: App {
         WindowGroup {
             RootView()
                 .onAppear {
-                    Sampler.start()
+                    Sampler.startOnce()
                 }
         }
     }
 }
 ```
 
-If the app already has a startup hook, add `Sampler.start()` there instead of creating a duplicate lifecycle path.
+If the app already has a root view startup hook, add `Sampler.startOnce()` there instead of creating a duplicate lifecycle path.
 
 ## UIKit Apps
 
@@ -82,7 +82,7 @@ For older app delegate setups without scenes, call `Sampler.start()` after the m
 
 If editing an `.xcodeproj` directly:
 
-- Add a Swift package reference for `https://github.com/gabrieltmitchell/sampler` using branch `main`.
+- Add a Swift package reference for `https://github.com/gabrieltmitchell/sampler` using version `0.1.2` or newer.
 - Add an `XCSwiftPackageProductDependency` with `productName = Sampler`.
 - Add the product dependency to the app target's `packageProductDependencies`.
 - Add the package product to the app target's Frameworks build phase.
@@ -94,7 +94,7 @@ Do not add Sampler to production extension targets unless the user specifically 
 If the app is managed by `Package.swift`, add Sampler as a dependency and target dependency:
 
 ```swift
-.package(url: "https://github.com/gabrieltmitchell/sampler", branch: "main")
+.package(url: "https://github.com/gabrieltmitchell/sampler", from: "0.1.2")
 ```
 
 ```swift
@@ -135,7 +135,13 @@ After installing:
 If the user wants simulator annotations to go directly to their coding agent, recommend configuring Sampler MCP after the basic package install succeeds:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp server"
+npx add-mcp "npx -y sampler-mcp@latest server --project ."
+```
+
+Preflight check:
+
+```bash
+npx -y sampler-mcp@latest doctor --project .
 ```
 
 The MCP server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button.
@@ -147,6 +153,8 @@ Useful watch-mode prompt for MCP clients without auto-dispatch:
 ```text
 Watch for Sampler annotations. When a new annotation arrives, acknowledge it, inspect the relevant code, make the fix, run the appropriate checks, and mark the annotation resolved with a short summary. Continue until I say stop.
 ```
+
+If an app tracks branch `main`, Xcode still pins a resolved commit in `Package.resolved`. Use **File > Packages > Update to Latest Package Versions** to move the pin, or compare the resolved revision with `git ls-remote https://github.com/gabrieltmitchell/sampler refs/heads/main`.
 
 ## Removal
 

@@ -15,7 +15,7 @@ Good fit for:
 
 ## Setup
 
-Add Sampler to your app and call `Sampler.start()` once at launch.
+Add Sampler to your app and call `Sampler.startOnce()` once after the root SwiftUI view appears, or `Sampler.start(in:)` from UIKit scene setup.
 
 See [INSTALL.md](INSTALL.md) for the full install guide.
 

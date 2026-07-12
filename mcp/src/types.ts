@@ -1,5 +1,19 @@
 export type SamplerAnnotationStatus = "pending" | "acknowledged" | "resolved" | "dismissed";
 
+export type AutoDispatchState =
+  | "ready"
+  | "disabled"
+  | "missing_cursor_agent"
+  | "auth_required"
+  | "logs_not_writable"
+  | "queued"
+  | "agent_starting"
+  | "agent_started"
+  | "agent_stalled"
+  | "running"
+  | "agent_completed"
+  | "last_run_failed";
+
 export interface SamplerAnnotationPayload {
   sessionId?: string;
   source?: {
@@ -56,4 +70,18 @@ export interface StoredAnnotationStatus {
   resolution: string | null;
   updatedAt: string;
   resolvedAt: string | null;
+}
+
+export interface AutoDispatchStatus {
+  enabled: boolean;
+  state: AutoDispatchState;
+  healthy: boolean;
+  project: string | null;
+  reason: string | null;
+  lastError: string | null;
+  lastLogPath: string | null;
+  lastLogEmpty: boolean | null;
+  pid: number | null;
+  command: string | null;
+  updatedAt: string;
 }

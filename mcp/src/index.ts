@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { SamplerDispatcher, isCursorAgentAvailable } from "./dispatch.js";
+import { SamplerDispatcher } from "./dispatch.js";
+import { runDoctor } from "./doctor.js";
 import { AnnotationHub, startHttpServer } from "./http.js";
 import { startMcpServer } from "./mcp.js";
 import { SamplerStore } from "./store.js";
+import type { AutoDispatchStatus } from "./types.js";
 
 const program = new Command();
 
 program
   .name("sampler-mcp")
   .description("MCP server for Sampler iOS visual feedback annotations")
-  .version("0.1.1");
+  .version("0.1.2");
 
 program
   .command("server")
@@ -34,25 +35,45 @@ program
   }) => {
     const store = new SamplerStore(options.store);
     const hub = new AnnotationHub();
+    let dispatcher: SamplerDispatcher | undefined;
+    const disabledStatus = (): AutoDispatchStatus => ({
+      enabled: false,
+      state: "disabled",
+      healthy: true,
+      project: options.project,
+      reason: options.dispatch === false ? "auto-dispatch disabled by --no-dispatch" : "auto-dispatch unavailable",
+      lastError: null,
+      lastLogPath: null,
+      lastLogEmpty: null,
+      pid: null,
+      command: null,
+      updatedAt: new Date().toISOString()
+    });
 
     if (!options.mcpOnly) {
       const http = await startHttpServer({
         port: Number.parseInt(options.port, 10),
         host: options.host,
         store,
-        hub
+        hub,
+        autoDispatchStatus: () => dispatcher?.status() ?? disabledStatus(),
+        retryDispatch: options.dispatch !== false ? () => dispatcher?.retry() : undefined
       });
       console.error(`Sampler HTTP server listening at ${http.url}`);
       console.error(`Sampler store: ${store.rootDir}`);
       if (options.dispatch !== false) {
-        const dispatcher = new SamplerDispatcher({
+        dispatcher = new SamplerDispatcher({
           baseUrl: http.url,
           projectPath: options.project,
           store,
           hub
         });
         dispatcher.start();
+        const dispatchStatus = dispatcher.status();
+        console.error(`Sampler auto-dispatch: ${dispatchStatus.healthy ? "enabled" : `disabled (${dispatchStatus.reason})`}`);
         console.error(`Sampler auto-dispatch project: ${options.project}`);
+      } else {
+        console.error("Sampler auto-dispatch: disabled by --no-dispatch");
       }
     }
 
@@ -63,19 +84,17 @@ program
   .command("doctor")
   .description("Check the Sampler MCP local setup")
   .option("--store <path>", "Storage directory")
-  .action((options: { store?: string }) => {
+  .option("--project <path>", "Project directory to inspect")
+  .option("-p, --port <port>", "HTTP server port to check", "4747")
+  .action(async (options: { store?: string; project?: string; port: string }) => {
     const store = new SamplerStore(options.store);
     const dbPath = join(store.rootDir, "store.db");
-
-    console.log("Sampler MCP doctor");
-    console.log(`store: ${store.rootDir}`);
-    console.log(`database: ${existsSync(dbPath) ? "ok" : "missing"}`);
-    console.log(`sessions: ${store.listSessions().length}`);
-    console.log(`pending annotations: ${store.getPending().length}`);
-    console.log(`cursor-agent: ${isCursorAgentAvailable() ? "ok" : "missing"}`);
-    console.log("");
-    console.log("To configure an MCP-aware coding agent:");
-    console.log('npx add-mcp "npx -y sampler-mcp server"');
+    await runDoctor({
+      store,
+      dbPath,
+      project: options.project,
+      port: Number.parseInt(options.port, 10)
+    });
   });
 
 program.parseAsync(process.argv).catch((error) => {

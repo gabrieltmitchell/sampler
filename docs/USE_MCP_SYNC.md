@@ -33,13 +33,13 @@ Good fit for:
 Install the MCP server into your agent with:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp server"
+npx add-mcp "npx -y sampler-mcp@latest server --project ."
 ```
 
 Or start it manually:
 
 ```bash
-npx -y sampler-mcp server
+npx -y sampler-mcp@latest server --project .
 ```
 
 The server exposes:
@@ -50,6 +50,21 @@ The server exposes:
 - Optional auto-dispatch through the Cursor CLI (`cursor-agent`) when new annotations arrive
 
 Run `sampler-mcp doctor` to confirm the local store and `cursor-agent` availability.
+
+Cursor MCP config example:
+
+```json
+{
+  "mcpServers": {
+    "sampler": {
+      "command": "npx",
+      "args": ["-y", "sampler-mcp@latest", "server", "--project", "."]
+    }
+  }
+}
+```
+
+If `npx` fails with `npm ERR! cb.apply is not a function`, your shell may be finding an old Node/npm install. Use the full path to a modern `npx`, commonly `/opt/homebrew/bin/npx` on Apple Silicon Macs.
 
 ## MCP Tools
 
@@ -81,13 +96,22 @@ When the server runs inside a Cursor project and `cursor-agent` is available on 
 To disable this behavior, run:
 
 ```bash
-npx -y sampler-mcp server --no-dispatch
+npx -y sampler-mcp@latest server --no-dispatch
 ```
 
 To point auto-dispatch at a specific app checkout, run:
 
 ```bash
-npx -y sampler-mcp server --project /path/to/ios-app
+npx -y sampler-mcp@latest server --project /path/to/ios-app
+```
+
+Preflight checklist:
+
+```bash
+cursor-agent --version
+cursor-agent login
+npx -y sampler-mcp@latest doctor --project .
+npx -y sampler-mcp@latest server --project .
 ```
 
 ## Watch Mode Fallback

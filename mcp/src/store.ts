@@ -174,6 +174,10 @@ export class SamplerStore {
       : this.db.prepare(query).all()) as StoredAnnotationWithSession[];
   }
 
+  getDispatchCandidates(): StoredAnnotationWithSession[] {
+    return this.getPending().filter((annotation) => annotation.status === "pending" || annotation.status === "acknowledged");
+  }
+
   getSessionStatuses(sessionId: string): StoredAnnotationStatus[] {
     return this.db.prepare(
       `select id,
@@ -203,6 +207,46 @@ export class SamplerStore {
     ).run(status, resolution ?? null, status, now, now, id);
 
     return this.getAnnotation(id);
+  }
+
+  updateStatusAndProgress(
+    id: string,
+    status: SamplerAnnotationStatus,
+    progress: string | null,
+    resolution?: string
+  ): StoredAnnotation | undefined {
+    const now = new Date().toISOString();
+    this.db.prepare(
+      `update annotations
+       set status = ?,
+           progress = ?,
+           resolution = coalesce(?, resolution),
+           resolved_at = case when ? in ('resolved', 'dismissed') then ? else resolved_at end,
+           updated_at = ?
+       where id = ?`
+    ).run(status, progress, resolution ?? null, status, now, now, id);
+
+    return this.getAnnotation(id);
+  }
+
+  updateProgressForAnnotations(ids: string[], progress: string): void {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const transaction = this.db.transaction(() => {
+      const statement = this.db.prepare(
+        `update annotations
+         set progress = ?,
+             updated_at = ?
+         where id = ?`
+      );
+      for (const id of ids) {
+        statement.run(progress, now, id);
+      }
+    });
+    transaction();
   }
 
   updateProgress(id: string, progress: string | null): StoredAnnotation | undefined {

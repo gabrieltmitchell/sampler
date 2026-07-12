@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
-import type { SamplerAnnotationPayload, SamplerAnnotationStatus } from "./types.js";
+import type { AutoDispatchStatus, SamplerAnnotationPayload, SamplerAnnotationStatus } from "./types.js";
 import { SamplerStore } from "./store.js";
 
 type AnnotationListener = () => void;
@@ -40,12 +40,14 @@ export interface HttpServerOptions {
   host?: string;
   store: SamplerStore;
   hub: AnnotationHub;
+  autoDispatchStatus?: () => AutoDispatchStatus;
+  retryDispatch?: () => void;
 }
 
 export function startHttpServer(options: HttpServerOptions) {
   const server = createServer(async (request, response) => {
     try {
-      await routeRequest(request, response, options.store, options.hub);
+      await routeRequest(request, response, options);
     } catch (error) {
       writeJson(response, 500, {
         error: error instanceof Error ? error.message : String(error)
@@ -71,9 +73,9 @@ export function startHttpServer(options: HttpServerOptions) {
 async function routeRequest(
   request: IncomingMessage,
   response: ServerResponse,
-  store: SamplerStore,
-  hub: AnnotationHub
+  options: HttpServerOptions
 ): Promise<void> {
+  const { store, hub } = options;
   const url = new URL(request.url ?? "/", "http://localhost");
   addCorsHeaders(response);
 
@@ -93,8 +95,31 @@ async function routeRequest(
       ok: true,
       sessions: store.listSessions().length,
       pending: store.getPending().length,
-      store: store.rootDir
+      store: store.rootDir,
+      autoDispatch: options.autoDispatchStatus?.() ?? {
+        enabled: false,
+        state: "disabled",
+        healthy: true,
+        project: null,
+        reason: "auto-dispatch disabled",
+        lastError: null,
+        lastLogPath: null,
+        lastLogEmpty: null,
+        pid: null,
+        command: null,
+        updatedAt: new Date().toISOString()
+      }
     });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/dispatch/retry") {
+    if (!options.retryDispatch) {
+      writeJson(response, 409, { error: "Auto-dispatch is disabled" });
+      return;
+    }
+    options.retryDispatch();
+    writeJson(response, 202, { ok: true, autoDispatch: options.autoDispatchStatus?.() });
     return;
   }
 

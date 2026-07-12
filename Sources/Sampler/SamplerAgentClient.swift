@@ -64,6 +64,19 @@ final class SamplerAgentClient {
 
         return try JSONDecoder().decode(AgentAnnotationStatusResponse.self, from: data).annotations
     }
+
+    func fetchServerStatus() async throws -> AgentServerStatus {
+        let statusURL = endpoint.appending(path: "status")
+        var request = URLRequest(url: statusURL)
+        request.timeoutInterval = 2
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+            throw SamplerError.agentSyncFailed
+        }
+
+        return try JSONDecoder().decode(AgentServerStatus.self, from: data)
+    }
 }
 
 struct AgentAnnotationStatus: Decodable {
@@ -82,5 +95,33 @@ struct AgentAnnotationStatus: Decodable {
 
 private struct AgentAnnotationStatusResponse: Decodable {
     let annotations: [AgentAnnotationStatus]
+}
+
+struct AgentServerStatus: Decodable {
+    let autoDispatch: AutoDispatch?
+
+    struct AutoDispatch: Decodable {
+        let state: State?
+        let healthy: Bool?
+        let reason: String?
+        let lastError: String?
+        let lastLogPath: String?
+        let lastLogEmpty: Bool?
+
+        enum State: String, Decodable {
+            case ready
+            case disabled
+            case missingCursorAgent = "missing_cursor_agent"
+            case authRequired = "auth_required"
+            case logsNotWritable = "logs_not_writable"
+            case queued
+            case agentStarting = "agent_starting"
+            case agentStarted = "agent_started"
+            case agentStalled = "agent_stalled"
+            case running
+            case agentCompleted = "agent_completed"
+            case lastRunFailed = "last_run_failed"
+        }
+    }
 }
 #endif

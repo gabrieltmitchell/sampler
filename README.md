@@ -12,9 +12,9 @@ Paste this into Cursor, Claude Code, Codex, Windsurf, or another AI coding tool 
 
 ```text
 Add the Sampler visual feedback widget to my iOS app:
-1. Add the Swift package https://github.com/gabrieltmitchell/sampler from the main branch to my app target.
+1. Add the Swift package https://github.com/gabrieltmitchell/sampler from version 0.1.2 to my app target.
 2. Import Sampler.
-3. Call Sampler.start() once at app launch (SwiftUI: .onAppear on the root view; UIKit: scene(_:willConnectTo:)).
+3. Start Sampler once after the root UI appears (SwiftUI: Sampler.startOnce() in .onAppear; UIKit: scene(_:willConnectTo:)).
 4. Sampler compiles to a no-op in Release builds, so this is safe to commit.
 Full instructions: https://github.com/gabrieltmitchell/sampler/blob/main/AGENTS.md
 ```
@@ -40,13 +40,34 @@ The skill detects your iOS app structure, adds the Swift package, wires `Sampler
 For simulator-based direct-to-agent feedback, configure the Sampler MCP server:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp server"
+npx add-mcp "npx -y sampler-mcp@latest server --project ."
 ```
 
 Or run it manually:
 
 ```bash
-npx -y sampler-mcp server
+npx -y sampler-mcp@latest server --project .
+```
+
+Cursor MCP config:
+
+```json
+{
+  "mcpServers": {
+    "sampler": {
+      "command": "npx",
+      "args": ["-y", "sampler-mcp@latest", "server", "--project", "."]
+    }
+  }
+}
+```
+
+Preflight:
+
+```bash
+cursor-agent --version
+cursor-agent login
+npx -y sampler-mcp@latest doctor --project .
 ```
 
 When `sampler-mcp` is reachable at `http://localhost:4747`, Sampler running in the iOS Simulator shows a Send to Agent button in the annotation toolbar. Tap it to send the current annotations directly to your local Sampler queue.
@@ -67,11 +88,11 @@ In Xcode, go to **File > Add Package Dependencies...** and add:
 https://github.com/gabrieltmitchell/sampler
 ```
 
-For the dependency rule, choose **Branch** and enter `main` so new installs use the latest widget code.
+For the dependency rule, choose **Up to Next Major Version** from `0.1.2`.
 
 Choose the `Sampler` package product and add it to your app target.
 
-Then start Sampler once when your app launches:
+Then start Sampler once after your root UI appears:
 
 ```swift
 import SwiftUI
@@ -83,7 +104,7 @@ struct MyApp: App {
         WindowGroup {
             RootView()
                 .onAppear {
-                    Sampler.start()
+                    Sampler.startOnce()
                 }
         }
     }
@@ -110,6 +131,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 ```
 
 You may still wrap the call in `#if DEBUG` if you prefer, but Sampler already makes Release builds no-op.
+
+### Latest Development Channel
+
+If you track branch `main`, Xcode still pins a specific commit in `Package.resolved`. Run **File > Packages > Update to Latest Package Versions** when you want the newest widget code. If the widget looks stale, compare the Sampler revision in `Package.resolved` against:
+
+```bash
+git ls-remote https://github.com/gabrieltmitchell/sampler refs/heads/main
+```
 
 ## Features
 

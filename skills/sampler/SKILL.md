@@ -32,7 +32,7 @@ Sampler
    - Swift package app: look for `Package.swift`.
 
 3. **Add the Swift package**
-   - Add `https://github.com/gabrieltmitchell/sampler` from branch `main`.
+   - Add `https://github.com/gabrieltmitchell/sampler` from version `0.1.2`.
    - Link only the `Sampler` product to the main iOS app target.
    - Do not add the example app from the Sampler repository.
 
@@ -45,7 +45,7 @@ Sampler
 
    RootView()
        .onAppear {
-           Sampler.start()
+           Sampler.startOnce()
        }
    ```
 
@@ -75,4 +75,5 @@ Sampler
 - Sampler requires iOS 16+.
 - Sampler is safe to commit. `Sampler.start()` and `Sampler.stop()` are empty no-ops in Release builds.
 - Do not create gitignored local source files for Sampler. The intended install is a normal Swift package dependency plus one startup call.
+- If the app already tracks Sampler branch `main`, Xcode may keep an older commit pinned in `Package.resolved`; update packages when the user wants the newest widget.
 - Full agent instructions live in `AGENTS.md`.

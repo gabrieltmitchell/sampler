@@ -6,11 +6,11 @@ Open your iOS app in Cursor, Claude Code, Codex, Windsurf, or another AI coding 
 Add the Sampler visual feedback widget to this iOS app.
 
 Requirements:
-1. Add the Swift package https://github.com/gabrieltmitchell/sampler from the main branch.
+1. Add the Swift package https://github.com/gabrieltmitchell/sampler from version 0.1.2.
 2. Link the Sampler package product to the main app target only.
 3. Import Sampler.
-4. Call Sampler.start() once when the app launches.
-   - SwiftUI: use .onAppear on the root view inside WindowGroup.
+4. Start Sampler once after the app UI exists.
+   - SwiftUI: call Sampler.startOnce() from .onAppear on the root view inside WindowGroup.
    - UIKit: use scene(_:willConnectTo:) and call Sampler.start(in: windowScene).
 5. Build both Debug and Release.
 
@@ -22,6 +22,8 @@ Do not add the example app. Only add the Sampler library product.
 
 The agent should add Sampler as a Swift Package Manager dependency and add one startup call.
 
+Prefer tagged releases for normal installs. If the app tracks branch `main`, remember Xcode pins a resolved commit in `Package.resolved`; update packages to move that pin.
+
 SwiftUI example:
 
 ```swift
@@ -29,7 +31,7 @@ import Sampler
 
 RootView()
     .onAppear {
-        Sampler.start()
+        Sampler.startOnce()
     }
 ```
 

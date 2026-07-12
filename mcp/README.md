@@ -13,13 +13,26 @@ MCP server for Sampler iOS visual feedback annotations.
 Configure an MCP-aware coding agent with:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp server"
+npx add-mcp "npx -y sampler-mcp@latest server --project ."
 ```
 
 Or run the server manually:
 
 ```bash
-npx -y sampler-mcp server
+npx -y sampler-mcp@latest server --project .
+```
+
+Cursor MCP config:
+
+```json
+{
+  "mcpServers": {
+    "sampler": {
+      "command": "npx",
+      "args": ["-y", "sampler-mcp@latest", "server", "--project", "."]
+    }
+  }
+}
 ```
 
 ## Commands
@@ -27,6 +40,7 @@ npx -y sampler-mcp server
 ```bash
 sampler-mcp server          # Start HTTP + MCP server
 sampler-mcp doctor          # Check local store and setup
+sampler-mcp doctor --project /path/to/ios-app
 sampler-mcp server --port 8080
 sampler-mcp server --project /path/to/ios-app
 sampler-mcp server --no-dispatch
@@ -48,6 +62,7 @@ sampler-mcp server --mcp-only
 
 - `GET /health`
 - `GET /status`
+- `POST /dispatch/retry`
 - `GET /sessions`
 - `GET /sessions/:id`
 - `GET /sessions/:id/statuses`
