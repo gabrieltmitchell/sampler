@@ -41,10 +41,17 @@ export class SamplerDispatcher {
       return;
     }
 
-    if (!isCursorAgentAvailable()) {
-      this.setStatus("missing_cursor_agent", false, "cursor-agent was not found on PATH");
-      console.error("Sampler auto-dispatch: disabled (cursor-agent was not found on PATH)");
-      console.error("Install the Cursor CLI or use sampler_watch_annotations from an active agent.");
+    const cursorAgentCheck = checkCursorAgent();
+    if (!cursorAgentCheck.ok) {
+      this.setStatus(cursorAgentCheck.state, false, cursorAgentCheck.reason, {
+        lastOutput: cursorAgentCheck.output
+      });
+      console.error(`Sampler auto-dispatch: disabled (${cursorAgentCheck.reason})`);
+      if (cursorAgentCheck.state === "invalid_cursor_config") {
+        console.error("Fix .cursor/cli.json by removing unsupported keys, then restart sampler-mcp.");
+      } else {
+        console.error("Install the Cursor CLI or use sampler_watch_annotations from an active agent.");
+      }
       return;
     }
 
@@ -386,8 +393,43 @@ export class SamplerDispatcher {
 }
 
 export function isCursorAgentAvailable(): boolean {
-  const result = spawnSync("cursor-agent", ["--version"], { stdio: "ignore" });
-  return result.status === 0;
+  return checkCursorAgent().ok;
+}
+
+export function checkCursorAgent():
+  | { ok: true }
+  | { ok: false; state: "missing_cursor_agent" | "invalid_cursor_config" | "last_run_failed"; reason: string; output: string | null } {
+  const pathResult = spawnSync("sh", ["-lc", "command -v cursor-agent"], { encoding: "utf8", timeout: 3000 });
+  if (!pathResult.stdout.trim()) {
+    return {
+      ok: false,
+      state: "missing_cursor_agent",
+      reason: pathResult.stderr.trim() || "cursor-agent was not found on PATH",
+      output: null
+    };
+  }
+
+  const result = spawnSync("cursor-agent", ["--version"], { encoding: "utf8", timeout: 5000 });
+  const output = `${result.stdout}${result.stderr}`.trim();
+  if (result.status === 0) {
+    return { ok: true };
+  }
+
+  if (isInvalidCursorConfigOutput(output)) {
+    return {
+      ok: false,
+      state: "invalid_cursor_config",
+      reason: cursorConfigReason(output),
+      output
+    };
+  }
+
+  return {
+    ok: false,
+    state: "last_run_failed",
+    reason: output || `cursor-agent --version exited with ${result.status ?? "unknown"}`,
+    output
+  };
 }
 
 export function agentLogsDir(store: SamplerStore): string {
@@ -495,6 +537,19 @@ function isReconnectOutput(output: string): boolean {
     || normalized.includes("reconnecting")
     || normalized.includes("retry attempt")
     || normalized.includes("agentn.global.api5.cursor.sh");
+}
+
+export function isInvalidCursorConfigOutput(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return normalized.includes("unrecognized key")
+    && (normalized.includes(".cursor/cli.json") || normalized.includes("cli.json"));
+}
+
+export function cursorConfigReason(output: string): string {
+  const keys = output.match(/Unrecognized key\(s\):\s*([^\n]+)/i)?.[1]?.trim();
+  return keys
+    ? `.cursor/cli.json has unsupported key(s): ${keys}`
+    : ".cursor/cli.json has unsupported keys";
 }
 
 function extractRetryCount(output: string): number | null {

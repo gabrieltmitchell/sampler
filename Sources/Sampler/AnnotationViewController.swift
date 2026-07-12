@@ -832,6 +832,8 @@ final class AnnotationViewController: UIViewController {
             return "Cursor CLI login required."
         case .missingCursorAgent:
             return "Cursor CLI missing."
+        case .invalidCursorConfig:
+            return "Fix .cursor/cli.json, then restart MCP."
         case .logsNotWritable:
             return "Agent logs not writable."
         case .agentStalled:

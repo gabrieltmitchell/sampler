@@ -114,6 +114,7 @@ struct AgentServerStatus: Decodable {
             case ready
             case disabled
             case missingCursorAgent = "missing_cursor_agent"
+            case invalidCursorConfig = "invalid_cursor_config"
             case authRequired = "auth_required"
             case logsNotWritable = "logs_not_writable"
             case queued

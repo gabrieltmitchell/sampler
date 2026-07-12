@@ -4,6 +4,7 @@ export type AutoDispatchState =
   | "ready"
   | "disabled"
   | "missing_cursor_agent"
+  | "invalid_cursor_config"
   | "auth_required"
   | "logs_not_writable"
   | "queued"

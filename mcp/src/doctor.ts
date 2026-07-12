@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { agentLogsDir, ensureAgentLogsWritable } from "./dispatch.js";
+import { agentLogsDir, checkCursorAgent, ensureAgentLogsWritable } from "./dispatch.js";
 import type { SamplerStore } from "./store.js";
 
 export interface DoctorOptions {
@@ -17,7 +17,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const logCheck = ensureAgentLogsWritable(store);
   const npx = commandInfo("npx", ["--version"]);
   const npm = commandInfo("npm", ["--version"]);
-  const cursorAgent = commandInfo("cursor-agent", ["--version"]);
+  const cursorAgent = checkCursorAgent();
   const portUsed = await isPortInUse(port);
   const latestAuthError = latestAgentLogAuthError(store);
 
@@ -31,7 +31,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   console.log(`port ${port}: ${portUsed ? "in use" : "available"}`);
   console.log(`npm: ${npm.ok ? `${npm.version} (${npm.path})` : `missing (${npm.error})`}`);
   console.log(`npx: ${npx.ok ? `${npx.version} (${npx.path})` : `missing/broken (${npx.error})`}`);
-  console.log(`cursor-agent: ${cursorAgent.ok ? `${cursorAgent.version} (${cursorAgent.path})` : `missing (${cursorAgent.error})`}`);
+  console.log(`cursor-agent: ${cursorAgent.ok ? "ok" : `${cursorAgent.state} (${cursorAgent.reason})`}`);
   console.log(`cursor-agent auth: ${latestAuthError ? "required (latest dispatch log reported authentication required)" : "not verified by doctor"}`);
 
   if (project) {
@@ -56,9 +56,18 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     console.log(`mkdir -p "${agentLogsDir(store)}" && chmod u+w "${agentLogsDir(store)}"`);
   }
 
-  if (!cursorAgent.ok) {
+  if (!cursorAgent.ok && cursorAgent.state === "invalid_cursor_config") {
     console.log("");
-    console.log("Fix cursor-agent: install the Cursor CLI from Cursor, then run cursor-agent login.");
+    console.log(`Fix Cursor CLI config: ${cursorAgent.reason}.`);
+    console.log("Remove unsupported keys from .cursor/cli.json, then run cursor-agent --version again.");
+    if (cursorAgent.output) {
+      console.log("");
+      console.log("cursor-agent output:");
+      console.log(cursorAgent.output);
+    }
+  } else if (!cursorAgent.ok) {
+    console.log("");
+    console.log(`Fix cursor-agent: ${cursorAgent.reason}. Install the Cursor CLI from Cursor, then run cursor-agent login.`);
   }
 
   if (latestAuthError) {
