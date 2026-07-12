@@ -35,11 +35,13 @@ The skill detects your iOS app structure, adds the Swift package, wires `Sampler
 
 ## MCP Live Sync
 
-If you want simulator annotations to go directly to your coding agent, configure the Sampler MCP server:
+If you want simulator annotations to go directly to your coding agent, configure the Sampler MCP server from your app project root:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp@latest server --project ."
+npx -y sampler-mcp@latest init
 ```
+
+Then reload MCP servers in Cursor (Settings > MCP) or restart Cursor. To update later, run `npx -y sampler-mcp@latest update`.
 
 Or run the server manually:
 

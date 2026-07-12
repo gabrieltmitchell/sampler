@@ -10,11 +10,13 @@ MCP server for Sampler iOS visual feedback annotations.
 
 ## Install
 
-Configure an MCP-aware coding agent with:
+From the app project root:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp@latest server --project ."
+npx -y sampler-mcp@latest init
 ```
+
+This writes `.cursor/mcp.json` for the project, automatically choosing a working `npx` or `npm exec` command form (some machines have a broken npx shim that fails with `cb.apply is not a function`). Then reload MCP servers in Cursor (Settings > MCP) or restart Cursor.
 
 Or run the server manually:
 
@@ -22,22 +24,33 @@ Or run the server manually:
 npx -y sampler-mcp@latest server --project .
 ```
 
-Cursor MCP config:
+Cursor MCP config written by `init`:
 
 ```json
 {
   "mcpServers": {
     "sampler": {
       "command": "npx",
-      "args": ["-y", "sampler-mcp@latest", "server", "--project", "."]
+      "args": ["-y", "sampler-mcp@latest", "server", "--project", "/path/to/your-app"]
     }
   }
 }
 ```
 
+## Update
+
+```bash
+npx -y sampler-mcp@latest update
+```
+
+Prints the running vs latest npm version and the app's Sampler Swift package pin vs the latest release tag, with the exact update steps. Configs written by `init` use `sampler-mcp@latest`, so restarting the MCP server in Cursor picks up new server releases.
+
 ## Commands
 
 ```bash
+sampler-mcp init            # Write Cursor MCP config for this project
+sampler-mcp init --global   # Write to ~/.cursor/mcp.json instead
+sampler-mcp update          # Check server + widget versions and print update steps
 sampler-mcp server          # Start HTTP + MCP server
 sampler-mcp doctor          # Check local store and setup
 sampler-mcp doctor --project /path/to/ios-app

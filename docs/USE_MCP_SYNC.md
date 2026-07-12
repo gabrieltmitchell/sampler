@@ -30,16 +30,24 @@ Good fit for:
 
 ## Setup
 
-Install the MCP server into your agent with:
+From your app project root, run:
 
 ```bash
-npx add-mcp "npx -y sampler-mcp@latest server --project ."
+npx -y sampler-mcp@latest init
 ```
 
-Or start it manually:
+This writes the project's `.cursor/mcp.json` and automatically picks a working `npx` or `npm exec` command form. Then reload MCP servers in Cursor (Settings > MCP) or restart Cursor.
+
+Or start the server manually:
 
 ```bash
 npx -y sampler-mcp@latest server --project .
+```
+
+To update later:
+
+```bash
+npx -y sampler-mcp@latest update
 ```
 
 The server exposes:
@@ -64,7 +72,7 @@ Cursor MCP config example:
 }
 ```
 
-If `npx` fails with `npm ERR! cb.apply is not a function`, your shell may be finding an old Node/npm install. Use the full path to a modern `npx`, commonly `/opt/homebrew/bin/npx` on Apple Silicon Macs.
+If `npx` fails with `npm ERR! cb.apply is not a function`, your shell may be finding an old Node/npm install. `sampler-mcp init` detects this automatically and writes an `npm exec` or absolute-path form instead. If configuring by hand, use the full path to a modern `npx`, commonly `/opt/homebrew/bin/npx` on Apple Silicon Macs.
 
 ## MCP Tools
 

@@ -132,17 +132,27 @@ After installing:
 
 ## Optional MCP Live Sync
 
-If the user wants simulator annotations to go directly to their coding agent, recommend configuring Sampler MCP after the basic package install succeeds:
+If the user wants simulator annotations to go directly to their coding agent, configure Sampler MCP after the basic package install succeeds. Run this from the app project root; it writes `.cursor/mcp.json` itself and automatically picks a working `npx` or `npm exec` command form (so a broken npx shim does not require manual debugging):
 
 ```bash
-npx add-mcp "npx -y sampler-mcp@latest server --project ."
+npx -y sampler-mcp@latest init
 ```
+
+Then reload MCP servers in Cursor (Settings > MCP) or restart Cursor. Do not hand-edit `mcp.json` or probe ports unless `init` fails.
 
 Preflight check:
 
 ```bash
 npx -y sampler-mcp@latest doctor --project .
 ```
+
+To update later (new sampler-mcp release or new widget release):
+
+```bash
+npx -y sampler-mcp@latest update
+```
+
+This prints the running vs latest npm version, the app's resolved Sampler Swift package pin vs the latest release tag, and the exact update steps. Because `init` configures the server as `sampler-mcp@latest`, restarting the MCP in Cursor picks up new server releases automatically.
 
 The MCP server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button.
 

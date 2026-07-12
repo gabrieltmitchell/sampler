@@ -128,7 +128,7 @@ function latestAgentLogAuthError(store: SamplerStore): boolean {
   return contents.includes("Authentication required") || contents.includes("agent login");
 }
 
-function reportSwiftPackagePins(project: string): void {
+export function reportSwiftPackagePins(project: string): void {
   const resolvedFiles = findPackageResolved(project);
   if (resolvedFiles.length === 0) {
     console.log("swift package pins: no Package.resolved found");

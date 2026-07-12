@@ -6,6 +6,7 @@ import { SamplerDispatcher } from "./dispatch.js";
 import { runDoctor } from "./doctor.js";
 import { AnnotationHub, startHttpServer } from "./http.js";
 import { startMcpServer } from "./mcp.js";
+import { runInit, runUpdate } from "./setup.js";
 import { SamplerStore } from "./store.js";
 import type { AutoDispatchStatus } from "./types.js";
 import { packageVersion } from "./version.js";
@@ -99,6 +100,23 @@ program
       project: options.project,
       port: Number.parseInt(options.port, 10)
     });
+  });
+
+program
+  .command("init")
+  .description("Write the Cursor MCP config for Sampler in this project")
+  .option("--project <path>", "Project directory", process.cwd())
+  .option("--global", "Write to ~/.cursor/mcp.json instead of the project's .cursor/mcp.json")
+  .action((options: { project: string; global?: boolean }) => {
+    runInit(options);
+  });
+
+program
+  .command("update")
+  .description("Check for sampler-mcp and Sampler widget updates and print update steps")
+  .option("--project <path>", "Project directory", process.cwd())
+  .action((options: { project: string }) => {
+    runUpdate(options);
   });
 
 program.parseAsync(process.argv).catch((error) => {

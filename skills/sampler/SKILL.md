@@ -67,8 +67,8 @@ Sampler
 6. **Explain usage**
    - In Debug, the floating Sampler widget should appear over the app UI.
    - Users can annotate the screen, then copy/share feedback into their coding agent.
-   - If MCP support is desired, recommend `sampler-mcp` after the basic install succeeds.
-   - In Cursor projects, `sampler-mcp server` can auto-dispatch a local `cursor-agent` run for new annotations. Tell users to run `sampler-mcp doctor` if the widget sends annotations but no agent appears to start.
+   - If MCP support is desired, run `npx -y sampler-mcp@latest init` from the app project root after the basic install succeeds, then reload MCP servers in Cursor.
+   - In Cursor projects, `sampler-mcp server` can auto-dispatch a local `cursor-agent` run for new annotations. Tell users to run `sampler-mcp doctor` if the widget sends annotations but no agent appears to start, and `npx -y sampler-mcp@latest update` to check for new releases.
 
 ## Notes
 
