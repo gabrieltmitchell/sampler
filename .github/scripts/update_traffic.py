@@ -4,7 +4,7 @@
 GitHub's traffic API only keeps 14 days of data, so this runs daily (via the
 "Track downloads" workflow) and merges the latest window into clones.json on
 the `traffic` branch. badge.json is a Shields.io endpoint payload rendered by
-the downloads badge in the README.
+the clones badge in the README.
 """
 
 import json
@@ -62,7 +62,7 @@ def main() -> None:
         json.dumps(
             {
                 "schemaVersion": 1,
-                "label": "downloads",
+                "label": "clones",
                 "message": f"{abbreviate(total_clones)} total",
                 "color": "brightgreen",
             }
