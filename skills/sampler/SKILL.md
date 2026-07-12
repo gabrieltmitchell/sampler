@@ -32,7 +32,7 @@ Sampler
    - Swift package app: look for `Package.swift`.
 
 3. **Add the Swift package**
-   - Add `https://github.com/gabrieltmitchell/sampler` from version `0.1.0`.
+   - Add `https://github.com/gabrieltmitchell/sampler` from branch `main`.
    - Link only the `Sampler` product to the main iOS app target.
    - Do not add the example app from the Sampler repository.
 

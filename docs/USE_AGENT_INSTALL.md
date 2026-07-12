@@ -22,7 +22,7 @@ Open your iOS app in your AI coding tool and paste:
 Add the Sampler visual feedback widget to this iOS app.
 
 Requirements:
-1. Add the Swift package https://github.com/gabrieltmitchell/sampler from version 0.1.0.
+1. Add the Swift package https://github.com/gabrieltmitchell/sampler from the main branch.
 2. Link the Sampler package product to the main app target only.
 3. Import Sampler.
 4. Call Sampler.start() once when the app launches.

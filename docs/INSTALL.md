@@ -8,7 +8,7 @@ Open your iOS app in Cursor, Claude Code, Codex, Windsurf, or another coding age
 
 ```text
 Add the Sampler visual feedback widget to my iOS app:
-1. Add the Swift package https://github.com/gabrieltmitchell/sampler (from: 0.1.0) to my app target.
+1. Add the Swift package https://github.com/gabrieltmitchell/sampler from the main branch to my app target.
 2. Import Sampler.
 3. Call Sampler.start() once at app launch (SwiftUI: .onAppear on the root view; UIKit: scene(_:willConnectTo:)).
 4. Sampler compiles to a no-op in Release builds, so this is safe to commit.
@@ -54,9 +54,10 @@ The server listens on `http://localhost:4747`. When Sampler is running in the iO
 1. Open your app in Xcode.
 2. Choose **File > Add Package Dependencies...**.
 3. Enter `https://github.com/gabrieltmitchell/sampler`.
-4. Choose the `Sampler` package product.
-5. Add it to your main app target.
-6. Call `Sampler.start()` when your app launches.
+4. For the dependency rule, choose **Branch** and enter `main`.
+5. Choose the `Sampler` package product.
+6. Add it to your main app target.
+7. Call `Sampler.start()` when your app launches.
 
 SwiftUI example:
 

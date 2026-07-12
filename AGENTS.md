@@ -26,7 +26,7 @@ Add Sampler so the app shows a local visual feedback widget in Debug builds. Sam
 
 ## Install Steps
 
-1. Add the Swift package dependency `https://github.com/gabrieltmitchell/sampler` to the app.
+1. Add the Swift package dependency `https://github.com/gabrieltmitchell/sampler` from branch `main` to the app.
 2. Link the `Sampler` product to the app target, not a test target or extension target.
 3. Import `Sampler`.
 4. Call `Sampler.start()` once when the main app UI is available.
@@ -82,7 +82,7 @@ For older app delegate setups without scenes, call `Sampler.start()` after the m
 
 If editing an `.xcodeproj` directly:
 
-- Add a Swift package reference for `https://github.com/gabrieltmitchell/sampler`.
+- Add a Swift package reference for `https://github.com/gabrieltmitchell/sampler` using branch `main`.
 - Add an `XCSwiftPackageProductDependency` with `productName = Sampler`.
 - Add the product dependency to the app target's `packageProductDependencies`.
 - Add the package product to the app target's Frameworks build phase.
@@ -94,7 +94,7 @@ Do not add Sampler to production extension targets unless the user specifically 
 If the app is managed by `Package.swift`, add Sampler as a dependency and target dependency:
 
 ```swift
-.package(url: "https://github.com/gabrieltmitchell/sampler", from: "0.1.0")
+.package(url: "https://github.com/gabrieltmitchell/sampler", branch: "main")
 ```
 
 ```swift
