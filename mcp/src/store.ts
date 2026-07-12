@@ -7,6 +7,7 @@ import type {
   SamplerAnnotationPayload,
   SamplerAnnotationStatus,
   StoredAnnotation,
+  StoredAnnotationStatus,
   StoredAnnotationWithSession,
   StoredSession
 } from "./types.js";
@@ -131,6 +132,7 @@ export class SamplerStore {
               number,
               comment,
               status,
+              progress,
               payload_json as payloadJson,
               screenshot_path as screenshotPath,
               annotated_path as annotatedPath,
@@ -150,6 +152,7 @@ export class SamplerStore {
                           annotations.number,
                           annotations.comment,
                           annotations.status,
+                          annotations.progress,
                           annotations.payload_json as payloadJson,
                           annotations.screenshot_path as screenshotPath,
                           annotations.annotated_path as annotatedPath,
@@ -171,6 +174,23 @@ export class SamplerStore {
       : this.db.prepare(query).all()) as StoredAnnotationWithSession[];
   }
 
+  getSessionStatuses(sessionId: string): StoredAnnotationStatus[] {
+    return this.db.prepare(
+      `select id,
+              session_id as sessionId,
+              number,
+              comment,
+              status,
+              progress,
+              resolution,
+              updated_at as updatedAt,
+              resolved_at as resolvedAt
+       from annotations
+       where session_id = ?
+       order by created_at asc, number asc`
+    ).all(sessionId) as StoredAnnotationStatus[];
+  }
+
   updateStatus(id: string, status: SamplerAnnotationStatus, resolution?: string): StoredAnnotation | undefined {
     const now = new Date().toISOString();
     this.db.prepare(
@@ -185,6 +205,18 @@ export class SamplerStore {
     return this.getAnnotation(id);
   }
 
+  updateProgress(id: string, progress: string | null): StoredAnnotation | undefined {
+    const now = new Date().toISOString();
+    this.db.prepare(
+      `update annotations
+       set progress = ?,
+           updated_at = ?
+       where id = ?`
+    ).run(progress, now, id);
+
+    return this.getAnnotation(id);
+  }
+
   private getAnnotation(id: string): StoredAnnotation | undefined {
     return this.db.prepare(
       `select id,
@@ -192,6 +224,7 @@ export class SamplerStore {
               number,
               comment,
               status,
+              progress,
               payload_json as payloadJson,
               screenshot_path as screenshotPath,
               annotated_path as annotatedPath,
@@ -232,6 +265,7 @@ export class SamplerStore {
         number integer,
         comment text,
         status text not null default 'pending',
+        progress text,
         payload_json text not null,
         screenshot_path text,
         annotated_path text,
@@ -244,5 +278,15 @@ export class SamplerStore {
       create index if not exists annotations_session_status_idx
         on annotations(session_id, status);
     `);
+
+    this.addColumnIfMissing("annotations", "progress", "text");
+  }
+
+  private addColumnIfMissing(table: string, column: string, definition: string): void {
+    const columns = this.db.prepare(`pragma table_info(${table})`).all() as Array<{ name: string }>;
+    if (columns.some((entry) => entry.name === column)) {
+      return;
+    }
+    this.db.exec(`alter table ${table} add column ${column} ${definition}`);
   }
 }

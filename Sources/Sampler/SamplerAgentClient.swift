@@ -48,5 +48,39 @@ final class SamplerAgentClient {
             throw SamplerError.agentSyncFailed
         }
     }
+
+    func fetchStatuses() async throws -> [AgentAnnotationStatus] {
+        let statusesURL = endpoint
+            .appending(path: "sessions")
+            .appending(path: sessionID)
+            .appending(path: "statuses")
+        var request = URLRequest(url: statusesURL)
+        request.timeoutInterval = 2
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+            throw SamplerError.agentSyncFailed
+        }
+
+        return try JSONDecoder().decode(AgentAnnotationStatusResponse.self, from: data).annotations
+    }
+}
+
+struct AgentAnnotationStatus: Decodable {
+    let id: String
+    let status: Status
+    let progress: String?
+    let resolution: String?
+
+    enum Status: String, Decodable {
+        case pending
+        case acknowledged
+        case resolved
+        case dismissed
+    }
+}
+
+private struct AgentAnnotationStatusResponse: Decodable {
+    let annotations: [AgentAnnotationStatus]
 }
 #endif

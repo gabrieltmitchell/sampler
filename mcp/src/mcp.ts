@@ -120,6 +120,8 @@ function summarizeAnnotations(annotations: StoredAnnotationWithSession[]) {
     number: annotation.number,
     comment: annotation.comment,
     status: annotation.status,
+    progress: annotation.progress,
+    resolution: annotation.resolution,
     screenshotPath: annotation.screenshotPath,
     annotatedPath: annotation.annotatedPath,
     createdAt: annotation.createdAt,

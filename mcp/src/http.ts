@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
-import type { SamplerAnnotationPayload } from "./types.js";
+import type { SamplerAnnotationPayload, SamplerAnnotationStatus } from "./types.js";
 import { SamplerStore } from "./store.js";
 
 type AnnotationListener = () => void;
@@ -130,6 +130,12 @@ async function routeRequest(
     return;
   }
 
+  const statusMatch = url.pathname.match(/^\/sessions\/([^/]+)\/statuses$/);
+  if (request.method === "GET" && statusMatch) {
+    writeJson(response, 200, { annotations: store.getSessionStatuses(statusMatch[1]) });
+    return;
+  }
+
   const annotationsMatch = url.pathname.match(/^\/sessions\/([^/]+)\/annotations$/);
   if (request.method === "POST" && annotationsMatch) {
     const payload = (await readJson(request)) as SamplerAnnotationPayload;
@@ -137,6 +143,43 @@ async function routeRequest(
     const result = store.upsertPayload(payload);
     hub.notify();
     writeJson(response, 201, result);
+    return;
+  }
+
+  const annotationMatch = url.pathname.match(/^\/annotations\/([^/]+)$/);
+  if (request.method === "PATCH" && annotationMatch) {
+    const body = (await readJson(request)) as {
+      status?: unknown;
+      resolution?: unknown;
+      progress?: unknown;
+    };
+    const status = body.status;
+    const resolution = typeof body.resolution === "string" ? body.resolution : undefined;
+    const hasProgress = Object.hasOwn(body, "progress");
+    const progress = typeof body.progress === "string" ? body.progress : null;
+
+    if (status !== undefined && !isAnnotationStatus(status)) {
+      writeJson(response, 400, { error: "Invalid annotation status" });
+      return;
+    }
+
+    if (status === undefined && !hasProgress) {
+      writeJson(response, 400, { error: "Expected status or progress" });
+      return;
+    }
+
+    let annotation = status ? store.updateStatus(annotationMatch[1], status, resolution) : undefined;
+    if (hasProgress) {
+      annotation = store.updateProgress(annotationMatch[1], progress);
+    }
+
+    if (!annotation) {
+      writeJson(response, 404, { error: "Annotation not found" });
+      return;
+    }
+
+    hub.notify();
+    writeJson(response, 200, { annotation });
     return;
   }
 
@@ -183,6 +226,10 @@ function addCorsHeaders(response: ServerResponse): void {
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+function isAnnotationStatus(value: unknown): value is SamplerAnnotationStatus {
+  return value === "pending" || value === "acknowledged" || value === "resolved" || value === "dismissed";
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown): void {

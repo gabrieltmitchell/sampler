@@ -140,7 +140,9 @@ npx add-mcp "npx -y sampler-mcp server"
 
 The MCP server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button.
 
-Useful watch-mode prompt:
+In Cursor projects, `sampler-mcp server` auto-dispatches a local `cursor-agent` run for new annotations when the Cursor CLI is installed and signed in. The widget shows one persistent status toast while the agent works, including progress such as "Making code changes..." and "Rebuilding app...", then the final resolution summary.
+
+Useful watch-mode prompt for MCP clients without auto-dispatch:
 
 ```text
 Watch for Sampler annotations. When a new annotation arrives, acknowledge it, inspect the relevant code, make the fix, run the appropriate checks, and mark the annotation resolved with a short summary. Continue until I say stop.

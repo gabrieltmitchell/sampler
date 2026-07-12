@@ -13,6 +13,9 @@ final class AnnotationViewController: UIViewController {
     private var annotations: [Annotation] = []
     private var markersByAnnotationID: [UUID: AnnotationMarkerView] = [:]
     private var draftView: AnnotationDraftView?
+    private var agentStatusToastView: AgentStatusToastView?
+    private var agentStatusTask: Task<Void, Never>?
+    private var lastAgentStatusTitle: String?
     private var currentAnnotationSurfaceOffset: CGFloat = 0
     private var dragStartPoint: CGPoint = .zero
     private var lastHapticTickPoint: CGPoint?
@@ -23,6 +26,7 @@ final class AnnotationViewController: UIViewController {
         didSet {
             overrideUserInterfaceStyle = overlayTheme.userInterfaceStyle
             draftView?.overlayTheme = overlayTheme
+            agentStatusToastView?.applyTheme(overlayTheme)
         }
     }
     var copyFormat: CopyFormat = .annotatedScreenshot
@@ -46,6 +50,7 @@ final class AnnotationViewController: UIViewController {
     }
 
     deinit {
+        agentStatusTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -123,9 +128,12 @@ final class AnnotationViewController: UIViewController {
             return
         }
 
-        showToast(title: "Sending to Agent...", iconName: "paperplane.fill")
+        agentStatusTask?.cancel()
+        let sentAnnotationIDs = Set(annotations.map { $0.id.uuidString })
         let annotationsToSend = annotations
-        Task { [weak self] in
+        showAgentStatusToast(title: "Sending to Agent...", state: .working)
+
+        agentStatusTask = Task { [weak self] in
             guard let self else {
                 return
             }
@@ -133,14 +141,16 @@ final class AnnotationViewController: UIViewController {
             do {
                 try await client.send(capture: capture, annotations: annotationsToSend)
                 await MainActor.run {
-                    showToast(title: "Sent to Agent", iconName: "checkmark.circle.fill")
+                    updateAgentStatusToast(title: "Waiting for agent...", state: .working)
                     if clearsAnnotationsAfterSend {
                         clearAnnotations()
                     }
                 }
+                await monitorAgentStatus(using: client, annotationIDs: sentAnnotationIDs)
             } catch {
                 await MainActor.run {
-                    showToast(title: error.localizedDescription)
+                    updateAgentStatusToast(title: error.localizedDescription, state: .failure)
+                    dismissAgentStatusToast(after: 4)
                 }
             }
         }
@@ -738,6 +748,132 @@ final class AnnotationViewController: UIViewController {
             && abs(rect.height - Constants.tapAnnotationSize.height) < 1
     }
 
+    private func monitorAgentStatus(using client: SamplerAgentClient, annotationIDs: Set<String>) async {
+        let deadline = Date().addingTimeInterval(600)
+
+        while !Task.isCancelled, Date() < deadline {
+            do {
+                try await Task.sleep(nanoseconds: 2_500_000_000)
+                let statuses = try await client.fetchStatuses()
+                    .filter { annotationIDs.contains($0.id) }
+
+                guard !statuses.isEmpty else {
+                    continue
+                }
+
+                if statuses.allSatisfy({ $0.status == .resolved }) {
+                    let summary = statuses.compactMap(\.resolution).firstNonEmpty ?? "Done"
+                    await MainActor.run {
+                        updateAgentStatusToast(title: "Fixed: \(summary)", state: .success)
+                        dismissAgentStatusToast(after: 4)
+                    }
+                    return
+                }
+
+                if let dismissed = statuses.first(where: { $0.status == .dismissed }) {
+                    let reason = dismissed.resolution.nonEmptyValue ?? "Needs manual review"
+                    await MainActor.run {
+                        updateAgentStatusToast(title: "Dismissed: \(reason)", state: .failure)
+                        dismissAgentStatusToast(after: 4)
+                    }
+                    return
+                }
+
+                let title = statusTitle(for: statuses)
+                await MainActor.run {
+                    updateAgentStatusToast(title: title, state: .working)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                await MainActor.run {
+                    updateAgentStatusToast(title: "Waiting for agent...", state: .working)
+                }
+            }
+        }
+
+        await MainActor.run {
+            updateAgentStatusToast(title: "Agent has not picked this up", state: .failure)
+            dismissAgentStatusToast(after: 4)
+        }
+    }
+
+    private func statusTitle(for statuses: [AgentAnnotationStatus]) -> String {
+        if let progress = statuses.compactMap(\.progress).firstNonEmpty {
+            return progress
+        }
+
+        if statuses.contains(where: { $0.status == .acknowledged }) {
+            return "Agent picked it up..."
+        }
+
+        return "Waiting for agent..."
+    }
+
+    private func showAgentStatusToast(title: String, state: AgentStatusToastView.State) {
+        lastAgentStatusTitle = nil
+        agentStatusToastView?.removeFromSuperview()
+        agentStatusToastView = nil
+
+        if agentStatusToastView == nil {
+            let toastView = AgentStatusToastView(title: title, state: state, overlayTheme: overlayTheme)
+            toastView.alpha = 0
+            toastView.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(toastView)
+            agentStatusToastView = toastView
+
+            NSLayoutConstraint.activate([
+                toastView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                toastView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+                toastView.heightAnchor.constraint(greaterThanOrEqualToConstant: 42),
+                toastView.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.86)
+            ])
+
+            toastView.transform = CGAffineTransform(translationX: 0, y: -64)
+            UIView.animate(
+                withDuration: 0.28,
+                delay: 0,
+                usingSpringWithDamping: 0.86,
+                initialSpringVelocity: 0.25,
+                options: [.allowUserInteraction]
+            ) {
+                toastView.alpha = 1
+                toastView.transform = .identity
+            }
+        }
+
+        updateAgentStatusToast(title: title, state: state)
+    }
+
+    private func updateAgentStatusToast(title: String, state: AgentStatusToastView.State) {
+        guard let agentStatusToastView else {
+            showAgentStatusToast(title: title, state: state)
+            return
+        }
+
+        let animated = lastAgentStatusTitle != nil && lastAgentStatusTitle != title
+        lastAgentStatusTitle = title
+        agentStatusToastView.update(title: title, state: state, animated: animated)
+    }
+
+    private func dismissAgentStatusToast(after delay: TimeInterval) {
+        let toastView = agentStatusToastView
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak toastView] in
+            guard let self, let toastView, toastView === self.agentStatusToastView else {
+                return
+            }
+
+            UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseIn]) {
+                toastView.alpha = 0
+                toastView.transform = CGAffineTransform(translationX: 0, y: -24)
+            } completion: { _ in
+                toastView.removeFromSuperview()
+                self.agentStatusToastView = nil
+                self.lastAgentStatusTitle = nil
+            }
+        }
+    }
+
     private func showToast(title: String, iconName: String? = nil) {
         let toastView = ToastView(title: title, iconName: iconName, overlayTheme: overlayTheme)
         toastView.alpha = 0
@@ -826,6 +962,149 @@ final class ToastView: UIView {
             stackView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
             stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
         ])
+    }
+}
+
+final class AgentStatusToastView: UIView {
+    enum State {
+        case working
+        case success
+        case failure
+    }
+
+    private let stackView = UIStackView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let iconView = UIImageView()
+    private let label = UILabel()
+    private var overlayTheme: OverlayTheme
+
+    init(title: String, state: State, overlayTheme: OverlayTheme) {
+        self.overlayTheme = overlayTheme
+        super.init(frame: .zero)
+        configure()
+        applyTheme(overlayTheme)
+        update(title: title, state: state, animated: false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func applyTheme(_ overlayTheme: OverlayTheme) {
+        self.overlayTheme = overlayTheme
+        overrideUserInterfaceStyle = overlayTheme.userInterfaceStyle
+        backgroundColor = overlayTheme.toastBackground
+        label.textColor = overlayTheme.primaryText
+        spinner.color = overlayTheme.primaryText
+        iconView.tintColor = overlayTheme.primaryText
+    }
+
+    func update(title: String, state: State, animated: Bool) {
+        updateIndicator(for: state)
+
+        let changes = {
+            self.label.text = title
+            self.layoutIfNeeded()
+        }
+
+        guard animated else {
+            changes()
+            return
+        }
+
+        UIView.transition(
+            with: label,
+            duration: 0.18,
+            options: [.transitionCrossDissolve, .allowUserInteraction]
+        ) {
+            self.label.text = title
+        }
+
+        UIView.animate(
+            withDuration: 0.24,
+            delay: 0,
+            usingSpringWithDamping: 0.86,
+            initialSpringVelocity: 0.18,
+            options: [.allowUserInteraction]
+        ) {
+            self.superview?.layoutIfNeeded()
+        }
+    }
+
+    private func configure() {
+        layer.cornerRadius = 21
+        layer.masksToBounds = true
+
+        stackView.axis = .horizontal
+        stackView.alignment = .center
+        stackView.spacing = 8
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stackView)
+
+        spinner.hidesWhenStopped = true
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(spinner)
+
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(iconView)
+
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.textAlignment = .center
+        label.numberOfLines = 1
+        stackView.addArrangedSubview(label)
+
+        NSLayoutConstraint.activate([
+            spinner.widthAnchor.constraint(equalToConstant: 16),
+            spinner.heightAnchor.constraint(equalToConstant: 16),
+            iconView.widthAnchor.constraint(equalToConstant: 16),
+            iconView.heightAnchor.constraint(equalToConstant: 16),
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+        ])
+    }
+
+    private func updateIndicator(for state: State) {
+        switch state {
+        case .working:
+            iconView.isHidden = true
+            spinner.isHidden = false
+            spinner.startAnimating()
+        case .success:
+            spinner.stopAnimating()
+            spinner.isHidden = true
+            iconView.isHidden = false
+            iconView.image = UIImage(
+                systemName: "checkmark.circle.fill",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            )
+        case .failure:
+            spinner.stopAnimating()
+            spinner.isHidden = true
+            iconView.isHidden = false
+            iconView.image = UIImage(
+                systemName: "exclamationmark.circle.fill",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            )
+        }
+    }
+}
+
+private extension Array where Element == String {
+    var firstNonEmpty: String? {
+        first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+}
+
+private extension Optional where Wrapped == String {
+    var nonEmptyValue: String? {
+        guard let value = self?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
     }
 }
 

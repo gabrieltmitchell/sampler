@@ -13,8 +13,9 @@ The flow:
 3. Tap the Sampler widget.
 4. Annotate the screen.
 5. Tap Send to Agent in the Sampler toolbar.
-6. The coding agent receives the annotation through MCP.
-7. The agent fixes the issue and marks the annotation resolved.
+6. The widget shows one persistent status toast while the annotation is processed.
+7. In Cursor projects, `sampler-mcp` auto-dispatches a local `cursor-agent` run.
+8. The agent fixes the issue, reports progress, rebuilds/relaunches the Simulator app, and marks the annotation resolved.
 
 ## When To Use This
 
@@ -46,6 +47,9 @@ The server exposes:
 - A local HTTP endpoint for Sampler to send annotations
 - MCP tools for agents to read, acknowledge, resolve, and watch annotations
 - Local storage for session history
+- Optional auto-dispatch through the Cursor CLI (`cursor-agent`) when new annotations arrive
+
+Run `sampler-mcp doctor` to confirm the local store and `cursor-agent` availability.
 
 ## MCP Tools
 
@@ -58,7 +62,7 @@ The MCP server exposes tools like:
 - `sampler_resolve`
 - `sampler_watch_annotations`
 
-The most important tool is `sampler_watch_annotations`, which lets an agent wait for new Sampler feedback and process it as it arrives.
+Cursor users normally do not need to call these manually because auto-dispatch starts a local `cursor-agent` run when new feedback arrives. The most important fallback tool is `sampler_watch_annotations`, which lets an active agent wait for new Sampler feedback and process it as it arrives.
 
 ## Simulator Flow
 
@@ -68,11 +72,27 @@ The iOS Simulator can reach a local server running on the Mac through `localhost
 http://localhost:4747
 ```
 
-When the server is reachable, the Sampler widget shows a Send to Agent button. That button POSTs the current annotation payload to the local server.
+When the server is reachable, the Sampler widget shows a Send to Agent button. That button POSTs the current annotation payload to the local server. After the send succeeds, the widget keeps a single status toast visible and polls the server for status/progress changes until the annotation is resolved, dismissed, or times out.
 
-## Watch Mode Prompt
+## Auto-Dispatch
 
-Once MCP sync is configured, tell your coding agent:
+When the server runs inside a Cursor project and `cursor-agent` is available on `PATH`, new annotations automatically launch a local agent in that project. The dispatched agent acknowledges the annotation, updates progress text for the widget, makes the code change, rebuilds/relaunches the Simulator app, and resolves the annotation with a short summary.
+
+To disable this behavior, run:
+
+```bash
+npx -y sampler-mcp server --no-dispatch
+```
+
+To point auto-dispatch at a specific app checkout, run:
+
+```bash
+npx -y sampler-mcp server --project /path/to/ios-app
+```
+
+## Watch Mode Fallback
+
+If your MCP client does not use auto-dispatch, tell your coding agent:
 
 ```text
 Watch for Sampler annotations. When a new annotation arrives, acknowledge it, inspect the relevant code, make the fix, run the appropriate checks, and mark the annotation resolved with a short summary. Continue until I say stop.

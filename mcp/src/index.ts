@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { SamplerDispatcher, isCursorAgentAvailable } from "./dispatch.js";
 import { AnnotationHub, startHttpServer } from "./http.js";
 import { startMcpServer } from "./mcp.js";
 import { SamplerStore } from "./store.js";
@@ -20,8 +21,17 @@ program
   .option("-p, --port <port>", "HTTP server port", "4747")
   .option("--host <host>", "HTTP server host", "127.0.0.1")
   .option("--store <path>", "Storage directory")
+  .option("--project <path>", "Project directory for auto-dispatched Cursor agents", process.cwd())
+  .option("--no-dispatch", "Disable automatic cursor-agent dispatch for new annotations")
   .option("--mcp-only", "Skip the HTTP receiver and only start MCP stdio")
-  .action(async (options: { port: string; host: string; store?: string; mcpOnly?: boolean }) => {
+  .action(async (options: {
+    port: string;
+    host: string;
+    store?: string;
+    project: string;
+    dispatch?: boolean;
+    mcpOnly?: boolean;
+  }) => {
     const store = new SamplerStore(options.store);
     const hub = new AnnotationHub();
 
@@ -34,6 +44,16 @@ program
       });
       console.error(`Sampler HTTP server listening at ${http.url}`);
       console.error(`Sampler store: ${store.rootDir}`);
+      if (options.dispatch !== false) {
+        const dispatcher = new SamplerDispatcher({
+          baseUrl: http.url,
+          projectPath: options.project,
+          store,
+          hub
+        });
+        dispatcher.start();
+        console.error(`Sampler auto-dispatch project: ${options.project}`);
+      }
     }
 
     await startMcpServer(store, hub);
@@ -52,6 +72,7 @@ program
     console.log(`database: ${existsSync(dbPath) ? "ok" : "missing"}`);
     console.log(`sessions: ${store.listSessions().length}`);
     console.log(`pending annotations: ${store.getPending().length}`);
+    console.log(`cursor-agent: ${isCursorAgentAvailable() ? "ok" : "missing"}`);
     console.log("");
     console.log("To configure an MCP-aware coding agent:");
     console.log('npx add-mcp "npx -y sampler-mcp server"');

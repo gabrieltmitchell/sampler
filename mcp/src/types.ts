@@ -30,6 +30,7 @@ export interface StoredAnnotation {
   number: number | null;
   comment: string | null;
   status: SamplerAnnotationStatus;
+  progress: string | null;
   payloadJson: string;
   screenshotPath: string | null;
   annotatedPath: string | null;
@@ -43,4 +44,16 @@ export interface StoredAnnotationWithSession extends StoredAnnotation {
   appName: string | null;
   deviceName: string | null;
   systemVersion: string | null;
+}
+
+export interface StoredAnnotationStatus {
+  id: string;
+  sessionId: string;
+  number: number | null;
+  comment: string | null;
+  status: SamplerAnnotationStatus;
+  progress: string | null;
+  resolution: string | null;
+  updatedAt: string;
+  resolvedAt: string | null;
 }

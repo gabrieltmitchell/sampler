@@ -47,7 +47,7 @@ Or run the server manually:
 npx -y sampler-mcp server
 ```
 
-The server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button.
+The server listens on `http://localhost:4747`. When Sampler is running in the iOS Simulator and the server is reachable, the annotation toolbar shows a Send to Agent button. In Cursor projects, new annotations can auto-dispatch a local `cursor-agent` run; use `sampler-mcp doctor` if sends succeed but no agent appears to start.
 
 ## Manual Xcode Install
 

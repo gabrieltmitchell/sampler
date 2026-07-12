@@ -6,6 +6,7 @@ MCP server for Sampler iOS visual feedback annotations.
 
 - An HTTP server on `http://localhost:4747` that receives annotations from Sampler running in the iOS Simulator.
 - An MCP stdio server that exposes annotation tools to coding agents.
+- An optional auto-dispatcher that starts `cursor-agent` for new annotations when the Cursor CLI is available.
 
 ## Install
 
@@ -27,6 +28,8 @@ npx -y sampler-mcp server
 sampler-mcp server          # Start HTTP + MCP server
 sampler-mcp doctor          # Check local store and setup
 sampler-mcp server --port 8080
+sampler-mcp server --project /path/to/ios-app
+sampler-mcp server --no-dispatch
 sampler-mcp server --mcp-only
 ```
 
@@ -47,7 +50,9 @@ sampler-mcp server --mcp-only
 - `GET /status`
 - `GET /sessions`
 - `GET /sessions/:id`
+- `GET /sessions/:id/statuses`
 - `POST /sessions/:id/annotations`
+- `PATCH /annotations/:id`
 - `GET /sessions/:id/pending`
 - `GET /pending`
 - `GET /events`
@@ -68,7 +73,13 @@ Screenshots are saved under:
 
 Use `--store <path>` to change the storage directory.
 
-## Watch Mode
+## Auto-Dispatch
+
+By default, `sampler-mcp server` starts an auto-dispatcher. When a new pending annotation arrives and `cursor-agent` is on `PATH`, the server starts a local Cursor agent in the project directory. The agent acknowledges the annotation, reports progress back to the widget, makes the code change, rebuilds/relaunches the app, and marks the annotation resolved.
+
+Use `--project <path>` to choose the app checkout for dispatched agents. Use `--no-dispatch` to keep the server in manual watch mode.
+
+## Watch Mode Fallback
 
 Tell your agent:
 
