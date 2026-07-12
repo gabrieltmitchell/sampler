@@ -487,14 +487,7 @@ final class AnnotationViewController: UIViewController {
         draftView.dismissKeyboard()
         applyAnnotationSurfaceOffset(0, animated: true)
 
-        UIView.animate(
-            withDuration: 0.18,
-            delay: 0,
-            options: [.curveEaseInOut]
-        ) {
-            draftView.alpha = 0
-            draftView.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
-        } completion: { _ in
+        draftView.collapseForDismissal {
             draftView.removeFromSuperview()
         }
 
@@ -1082,8 +1075,58 @@ final class AnnotationDraftView: UIView {
         }
     }
 
+    func collapseForDismissal(completion: @escaping () -> Void) {
+        textView.resignFirstResponder()
+        layoutIfNeeded()
+
+        let targetFrame = (annotationRect ?? frame).standardized
+        let pointIndicatorSnapshot = dismissalSnapshot(for: pointIndicatorView)
+        let selectionOutlineSnapshot = dismissalSnapshot(for: selectionOutlineView)
+        pointIndicatorView.alpha = 0
+        selectionOutlineView.alpha = 0
+
+        UIView.animate(
+            withDuration: 0.2,
+            delay: 0,
+            options: [.beginFromCurrentState, .curveEaseInOut]
+        ) {
+            self.frame = targetFrame
+            self.alpha = 0
+            self.transform = CGAffineTransform(scaleX: 0.86, y: 0.86)
+            self.layer.cornerRadius = min(18, max(10, targetFrame.height / 2))
+            self.textView.alpha = 0
+            self.titleLabel.alpha = 0
+            self.doneButton.alpha = 0
+            self.cancelButton.alpha = 0
+            self.deleteButton.alpha = 0
+            pointIndicatorSnapshot?.alpha = 0
+            pointIndicatorSnapshot?.transform = CGAffineTransform(scaleX: 0.58, y: 0.58)
+            selectionOutlineSnapshot?.alpha = 0
+            selectionOutlineSnapshot?.transform = CGAffineTransform(scaleX: 0.72, y: 0.72)
+            self.layoutIfNeeded()
+        } completion: { _ in
+            pointIndicatorSnapshot?.removeFromSuperview()
+            selectionOutlineSnapshot?.removeFromSuperview()
+            completion()
+        }
+    }
+
     func dismissKeyboard() {
         textView.resignFirstResponder()
+    }
+
+    private func dismissalSnapshot(for view: UIView) -> UIView? {
+        guard
+            view.alpha > 0.01,
+            let container = view.superview,
+            let snapshot = view.snapshotView(afterScreenUpdates: false)
+        else {
+            return nil
+        }
+
+        snapshot.frame = view.convert(view.bounds, to: container)
+        container.addSubview(snapshot)
+        return snapshot
     }
 
     private func focusTextView(attempt: Int = 0) {

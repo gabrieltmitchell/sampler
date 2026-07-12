@@ -1,329 +1,253 @@
 import SwiftUI
 
 struct ContentView: View {
-    private let activityData: [(day: String, minutes: CGFloat)] = [
-        ("27", 28), ("28", 35), ("29", 22), ("30", 44), ("1", 31), ("2", 50), ("3", 18),
-        ("4", 42), ("5", 48), ("6", 25), ("7", 55), ("8", 42), ("9", 60), ("10", 38)
-    ]
-
-    private let workouts: [(icon: String, name: String, time: String, calories: String)] = [
-        ("figure.run", "Morning Run", "Today · 32 min", "286 kcal"),
-        ("figure.strengthtraining.traditional", "Strength Training", "Yesterday · 45 min", "210 kcal"),
-        ("figure.yoga", "Yoga Flow", "Wed · 28 min", "124 kcal"),
-        ("figure.cycling", "Evening Ride", "Tue · 50 min", "340 kcal"),
-        ("figure.walk", "Brisk Walk", "Mon · 22 min", "98 kcal"),
-    ]
-
-    @State private var selectedDay: Int? = 8
+    private let skeleton = Color.gray.opacity(0.14)
+    private let outline = Color.gray.opacity(0.12)
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    stepsCard
-                    activityChart
-                    goalCard
-                    workoutHistory
+        ZStack {
+            Color(hex: 0xFAFAFA)
+                .ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 18) {
+                    header
+                    heroModule
+                    splitModules
+                    timelineModule
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 20)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("FitPath")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "applewatch")
-                            .font(.subheadline.weight(.semibold))
-                        Text("78%")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(Color(red: 0.20, green: 0.45, blue: 0.95))
-                    .accessibilityLabel("Watch connected, 78 percent battery")
-                    .accessibilityIdentifier("wearable_status")
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                    } label: {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, Color(red: 0.20, green: 0.45, blue: 0.95))
-                    }
-                    .accessibilityLabel("Profile")
-                    .accessibilityIdentifier("profile_button")
-                }
+                .padding(.top, 20)
+                .padding(.bottom, 28)
             }
         }
-    }
-
-    private var stepsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Today's Steps")
-                .font(.caption)
-                .foregroundStyle(Color(red: 0.55, green: 0.75, blue: 1.0))
-                .accessibilityIdentifier("hero_card_eyebrow")
-
-            Text("8,420")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .accessibilityIdentifier("hero_card_title")
-
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.right")
-                    .font(.caption.weight(.semibold))
-                Text("+1,240 vs yesterday")
-                    .font(.subheadline.weight(.medium))
-            }
-            .foregroundStyle(Color(red: 0.55, green: 0.82, blue: 1.0))
-            .accessibilityIdentifier("hero_card_body")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.12, blue: 0.35),
-                    Color(red: 0.08, green: 0.22, blue: 0.55)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .foregroundStyle(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("hero_card")
+        .accessibilityLabel("Skeleton app interface with header, modules, chart, and timeline")
     }
 
-    private var activityChart: some View {
-        let maxMinutes = activityData.map(\.minutes).max() ?? 1
-        let selected = selectedDay.map { activityData[$0] }
-
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Activity")
-                    .font(.headline)
-                Spacer()
-                if let selected {
-                    Text("\(Int(selected.minutes)) min · \(selected.day)")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color(red: 0.20, green: 0.45, blue: 0.95))
-                        .accessibilityLabel("\(Int(selected.minutes)) minutes on day \(selected.day)")
-                }
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                skeletonLine(width: 118, height: 14)
+                skeletonLine(width: 176, height: 28)
             }
 
-            HStack(alignment: .bottom, spacing: 4) {
-                ForEach(activityData.indices, id: \.self) { index in
-                    let entry = activityData[index]
-                    let height = max(12, (entry.minutes / maxMinutes) * 110)
-                    let isSelected = selectedDay == index
+            Spacer()
 
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedDay = index
-                        }
-                    } label: {
-                        VStack(spacing: 6) {
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(
-                                    isSelected
-                                        ? Color(red: 0.20, green: 0.45, blue: 0.95)
-                                        : Color(red: 0.20, green: 0.45, blue: 0.95).opacity(0.28)
-                                )
-                                .frame(height: height)
+            Circle()
+                .fill(.white)
+                .frame(width: 48, height: 48)
+                .overlay {
+                    Circle()
+                        .fill(skeleton)
+                        .frame(width: 26, height: 26)
+                }
+                .overlay {
+                    Circle()
+                        .stroke(outline, lineWidth: 1)
+                }
+                .softShadow()
+                .accessibilityLabel("Profile button placeholder")
+                .accessibilityIdentifier("profile_button")
+        }
+        .padding(.top, 4)
+    }
 
-                            Text(entry.day)
-                                .font(.system(size: 9, weight: isSelected ? .semibold : .regular))
-                                .foregroundStyle(isSelected ? Color(red: 0.20, green: 0.45, blue: 0.95) : .secondary)
+    private var heroModule: some View {
+        card(height: 182) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Circle()
+                        .fill(skeleton)
+                        .frame(width: 52, height: 52)
+
+                    Spacer()
+
+                    Capsule()
+                        .fill(skeleton)
+                        .frame(width: 76, height: 30)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(skeleton)
+                        .frame(height: 34)
+
+                    HStack(alignment: .bottom, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            skeletonLine(width: 184, height: 14)
+                            skeletonLine(width: 132, height: 12)
+                            skeletonLine(width: 92, height: 12)
                         }
+
+                        Spacer()
+
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(skeleton)
+                            .frame(width: 72, height: 48)
+                    }
+                }
+                .padding(.top, 2)
+                .accessibilityHidden(true)
+            }
+        }
+        .accessibilityIdentifier("hero_module")
+    }
+
+    private var splitModules: some View {
+        HStack(spacing: 14) {
+            card(height: 136, shadow: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Circle()
+                        .fill(skeleton)
+                        .frame(width: 42, height: 42)
+
+                    Spacer(minLength: 8)
+
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(skeleton)
                         .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Day \(entry.day), \(Int(entry.minutes)) active minutes")
+                        .frame(height: 22)
+                    skeletonLine(width: 72, height: 12)
                 }
             }
-            .frame(height: 140, alignment: .bottom)
-        }
-        .padding(18)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .accessibilityIdentifier("annotations_stat_card")
-    }
+            .accessibilityIdentifier("summary_module")
 
-    private var goalCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                Image(systemName: "figure.run")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color(red: 0.20, green: 0.45, blue: 0.95))
-                Text("Weekly Step Goal")
-                    .font(.headline)
-                    .accessibilityIdentifier("checkout_card_title")
-            }
-
-            HStack(spacing: 16) {
-                activityRings
-                    .frame(width: 72, height: 72)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Target this week")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Text("50,000 steps")
-                                .font(.title3.weight(.semibold))
+            card(height: 148, shadow: false, contentPadding: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(0..<4, id: \.self) { index in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(skeleton)
+                                .frame(width: 22, height: 22)
+                            skeletonLine(width: index == 1 ? 78 : 96, height: 10)
                         }
-                        Spacer()
-                        Text("68%")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(Color(red: 0.20, green: 0.45, blue: 0.95))
-                    }
-
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color(red: 0.20, green: 0.45, blue: 0.95).opacity(0.15))
-                            Capsule()
-                                .fill(Color(red: 0.20, green: 0.45, blue: 0.95))
-                                .frame(width: geometry.size.width * 0.68)
-                        }
-                    }
-                    .frame(height: 10)
-
-                    Text("34,000 done · 16,000 to go")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(16)
-            .background(Color(red: 0.20, green: 0.45, blue: 0.95).opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Weekly step goal, 68 percent complete, 34 thousand steps of 50 thousand target")
-            .accessibilityIdentifier("plan_card")
-
-            HStack(spacing: 16) {
-                fitnessIcon(systemName: "flame.fill", label: "Move", color: Color(red: 0.95, green: 0.30, blue: 0.35))
-                fitnessIcon(systemName: "figure.walk", label: "Steps", color: Color(red: 0.35, green: 0.85, blue: 0.45))
-                fitnessIcon(systemName: "figure.run", label: "Exercise", color: Color(red: 0.35, green: 0.75, blue: 0.95))
-            }
-
-            Button {
-            } label: {
-                Text("Log Activity")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color(red: 0.08, green: 0.22, blue: 0.55))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .accessibilityIdentifier("continue_button")
-        }
-        .padding(20)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 16, y: 8)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("checkout_card")
-    }
-
-    private var activityRings: some View {
-        let deepBlue = Color(red: 0.08, green: 0.22, blue: 0.55)
-        let midBlue = Color(red: 0.20, green: 0.45, blue: 0.95)
-        let lightBlue = Color(red: 0.45, green: 0.70, blue: 1.0)
-
-        return ZStack {
-            Circle()
-                .stroke(deepBlue.opacity(0.2), lineWidth: 8)
-            Circle()
-                .trim(from: 0, to: 0.82)
-                .stroke(deepBlue, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-
-            Circle()
-                .stroke(midBlue.opacity(0.2), lineWidth: 8)
-                .padding(10)
-            Circle()
-                .trim(from: 0, to: 0.68)
-                .stroke(midBlue, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(10)
-
-            Circle()
-                .stroke(lightBlue.opacity(0.25), lineWidth: 8)
-                .padding(20)
-            Circle()
-                .trim(from: 0, to: 0.55)
-                .stroke(lightBlue, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(20)
-        }
-        .accessibilityHidden(true)
-    }
-
-    private var workoutHistory: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Workout History")
-                .font(.headline)
-
-            VStack(spacing: 0) {
-                ForEach(workouts.indices, id: \.self) { index in
-                    let workout = workouts[index]
-                    HStack(spacing: 14) {
-                        Image(systemName: workout.icon)
-                            .font(.title3)
-                            .foregroundStyle(Color(red: 0.20, green: 0.45, blue: 0.95))
-                            .frame(width: 40, height: 40)
-                            .background(Color(red: 0.20, green: 0.45, blue: 0.95).opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(workout.name)
-                                .font(.subheadline.weight(.semibold))
-                            Text(workout.time)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Text(workout.calories)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color(red: 0.20, green: 0.45, blue: 0.95))
-                    }
-                    .padding(.vertical, 12)
-
-                    if index < workouts.count - 1 {
-                        Divider()
                     }
                 }
+                .frame(maxHeight: .infinity, alignment: .center)
             }
+            .accessibilityIdentifier("module_stack")
         }
-        .padding(18)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .accessibilityIdentifier("export_modes_stat_card")
     }
 
-    private func fitnessIcon(systemName: String, label: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: systemName)
-                .font(.title3)
-                .foregroundStyle(color)
-                .frame(width: 44, height: 44)
-                .background(color.opacity(0.12))
-                .clipShape(Circle())
-            Text(label)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
+    private var timelineModule: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<3, id: \.self) { index in
+                timelineRow(isLast: index == 2)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .background(alignment: .topLeading) {
+            DashedVerticalLine()
+                .stroke(outline, style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                .frame(width: 1.5)
+                .padding(.leading, 7.25)
+                .padding(.top, 30)
+                .padding(.bottom, 30)
+        }
+        .accessibilityIdentifier("timeline_module")
+        .accessibilityLabel("Timeline list placeholder")
+    }
+
+    private func timelineRow(isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Circle()
+                .fill(.white)
+                .frame(width: 16, height: 16)
+                .overlay {
+                    Circle()
+                        .stroke(outline, lineWidth: 1.5)
+                }
+                .padding(.top, 22)
+
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    skeletonLine(width: 120, height: 10)
+                    skeletonLine(width: 72, height: 10)
+                    skeletonLine(width: 108, height: 10)
+                    skeletonLine(width: 48, height: 10)
+                }
+
+                Spacer(minLength: 8)
+
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(skeleton)
+                    .frame(width: 92, height: 92)
+            }
+            .padding(14)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(outline, lineWidth: 1)
+            }
+        }
+        .padding(.bottom, isLast ? 0 : 14)
+    }
+
+    private func card<Content: View>(
+        width: CGFloat? = nil,
+        height: CGFloat? = nil,
+        shadow: Bool = true,
+        contentPadding: CGFloat = 18,
+        contentAlignment: Alignment = .topLeading,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+            .frame(width: width, height: height, alignment: contentAlignment)
+            .padding(contentPadding)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(outline, lineWidth: 1)
+            }
+            .modifier(SoftShadowModifier(isEnabled: shadow))
+    }
+
+    private func skeletonLine(width: CGFloat, height: CGFloat) -> some View {
+        Capsule()
+            .fill(skeleton)
+            .frame(width: width, height: height)
+    }
+}
+
+private struct SoftShadowModifier: ViewModifier {
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.softShadow()
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    func softShadow() -> some View {
+        shadow(color: .black.opacity(0.045), radius: 18, x: 0, y: 10)
+    }
+}
+
+private struct DashedVerticalLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        return path
+    }
+}
+
+private extension Color {
+    init(hex: UInt, alpha: Double = 1) {
+        self.init(
+            .sRGB,
+            red: Double((hex >> 16) & 0xff) / 255,
+            green: Double((hex >> 8) & 0xff) / 255,
+            blue: Double(hex & 0xff) / 255,
+            opacity: alpha
+        )
     }
 }
 
