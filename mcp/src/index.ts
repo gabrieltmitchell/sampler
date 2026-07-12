@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("sampler-mcp")
   .description("MCP server for Sampler iOS visual feedback annotations")
-  .version("0.1.0");
+  .version("0.1.1");
 
 program
   .command("server")
