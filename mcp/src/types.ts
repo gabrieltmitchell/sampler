@@ -6,6 +6,7 @@ export type AutoDispatchState =
   | "missing_cursor_agent"
   | "invalid_cursor_config"
   | "auth_required"
+  | "workspace_trust_required"
   | "logs_not_writable"
   | "queued"
   | "agent_starting"

@@ -1,0 +1,35 @@
+#!/usr/bin/env node
+const { readFileSync, writeFileSync } = require("node:fs");
+const { resolve } = require("node:path");
+
+const version = process.argv[2]?.replace(/^v/, "");
+
+if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
+  console.error("Usage: scripts/release-widget-version <x.y.z>");
+  process.exit(1);
+}
+
+const samplerPath = resolve("Sources/Sampler/Sampler.swift");
+const overlayPath = resolve("Sources/Sampler/OverlayWindow.swift");
+const sampler = readFileSync(samplerPath, "utf8");
+const overlay = readFileSync(overlayPath, "utf8");
+
+if (!overlay.includes("versionLabel.text = \"V\\(Sampler.version)\"")) {
+  console.error("Settings sheet is not reading from Sampler.version.");
+  process.exit(1);
+}
+
+const versionPattern = /public static let version = "\d+\.\d+\.\d+"/;
+if (!versionPattern.test(sampler)) {
+  console.error("Could not find Sampler.version in Sources/Sampler/Sampler.swift.");
+  process.exit(1);
+}
+
+const updated = sampler.replace(versionPattern, `public static let version = "${version}"`);
+writeFileSync(samplerPath, updated);
+
+console.log(`Updated Sampler.version to ${version}.`);
+console.log("Before publishing a Swift package release:");
+console.log("1. Run swift build.");
+console.log(`2. Commit this change.`);
+console.log(`3. Tag the release as ${version} (or v${version}, if you keep v-prefixed tags).`);

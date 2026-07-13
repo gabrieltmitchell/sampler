@@ -68,7 +68,9 @@ Sampler
    - In Debug, the floating Sampler widget should appear over the app UI.
    - Users can annotate the screen, then copy/share feedback into their coding agent.
    - If MCP support is desired, run `npx -y sampler-mcp@latest init` from the app project root after the basic install succeeds, then reload MCP servers in Cursor.
-   - In Cursor projects, `sampler-mcp server` can auto-dispatch a local `cursor-agent` run for new annotations. Tell users to run `sampler-mcp doctor` if the widget sends annotations but no agent appears to start, and `npx -y sampler-mcp@latest update` to check for new releases.
+   - If `npx` itself fails, try `/opt/homebrew/bin/npx -y sampler-mcp@latest init` or `npm exec --yes --package=sampler-mcp@latest -- sampler-mcp init`.
+   - In Cursor projects, `sampler-mcp server` can auto-dispatch a local `cursor-agent --trust` run for new annotations. Tell users to run `sampler-mcp doctor` if the widget sends annotations but no agent appears to start, and `npx -y sampler-mcp@latest update` to check for new releases.
+   - If Cursor reports `EADDRINUSE 127.0.0.1:4747`, stop the old Sampler MCP server or remove the Home/global MCP entry, then reload MCP. Prefer project-local `.cursor/mcp.json` for multiple app repos.
 
 ## Notes
 

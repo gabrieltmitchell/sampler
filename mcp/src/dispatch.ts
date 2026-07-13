@@ -21,6 +21,7 @@ export class SamplerDispatcher {
   private ignoredChildren = new WeakSet<ChildProcess>();
   private activeAnnotationIds: string[] = [];
   private publishingInternalStatus = false;
+  private transientRetryCounts = new Map<string, number>();
 
   constructor(private readonly options: SamplerDispatcherOptions) {
     this.statusValue = makeStatus({
@@ -128,7 +129,7 @@ export class SamplerDispatcher {
     this.activeAnnotationIds = annotationIds;
     const logStream = createWriteStream(logPath, { flags: "a" });
     const prompt = buildDispatchPrompt(this.options.baseUrl, annotations);
-    const args = ["-p", prompt, "--output-format", "text"];
+    const args = ["-p", prompt, "--output-format", "text", "--trust"];
     this.setStatus("agent_starting", true, `Starting agent for ${annotations.length} annotation(s)`, {
       lastLogPath: logPath,
       lastLogEmpty: true,
@@ -147,8 +148,8 @@ export class SamplerDispatcher {
     this.activeChild = child;
 
     this.setStatus("agent_started", true, "Agent process started", { pid: child.pid ?? null });
-    console.error(`Sampler auto-dispatch started in ${this.options.projectPath}`);
-    console.error(`Sampler auto-dispatch log: ${logPath}`);
+    console.error(`Sampler info: auto-dispatch started in ${this.options.projectPath}`);
+    console.error(`Sampler info: auto-dispatch log: ${logPath}`);
 
     let sawOutput = false;
     let outputBuffer = "";
@@ -158,12 +159,15 @@ export class SamplerDispatcher {
       outputBuffer = (outputBuffer + output).slice(-8000);
       const retryCount = extractRetryCount(outputBuffer);
       if (isReconnectOutput(outputBuffer)) {
-        this.setStatus("agent_reconnecting", true, "Agent reconnecting to Cursor service", {
+        const progress = isResourceExhaustedOutput(outputBuffer)
+          ? "Cursor API busy; retrying..."
+          : retryCount ? `Agent reconnecting... retry ${retryCount}` : "Agent reconnecting...";
+        this.setStatus("agent_reconnecting", true, progress, {
           lastLogEmpty: false,
           lastOutput: tailLine(outputBuffer),
           retryCount
         });
-        this.options.store.updateProgressForAnnotations(annotationIds, retryCount ? `Agent reconnecting... retry ${retryCount}` : "Agent reconnecting...");
+        this.options.store.updateProgressForAnnotations(annotationIds, progress);
         this.notifyHub();
         return;
       }
@@ -243,13 +247,13 @@ export class SamplerDispatcher {
 
     const reconnectTimeout = setTimeout(() => {
       if (this.isRunning && this.activeChild === child && this.statusValue.state === "agent_reconnecting") {
-        this.setStatus("agent_network_error", false, "Agent is still reconnecting to Cursor service", {
+        this.setStatus("agent_network_error", false, "Cursor API temporarily unavailable. Try again.", {
           lastLogPath: logPath,
           lastLogEmpty: false,
           lastOutput: tailLine(outputBuffer),
           retryCount: extractRetryCount(outputBuffer)
         });
-        this.options.store.updateProgressForAnnotations(annotationIds, "Agent network connection failed.");
+        this.options.store.updateProgressForAnnotations(annotationIds, "Cursor API temporarily unavailable. Try again.");
         this.stopActiveChild("agent reconnect timed out");
         this.notifyHub();
         if (this.rerunRequested) {
@@ -280,6 +284,7 @@ export class SamplerDispatcher {
         this.activeChild = undefined;
       }
       const authError = outputBuffer.includes("Authentication required") || outputBuffer.includes("agent login");
+      const trustError = isWorkspaceTrustOutput(outputBuffer);
       const networkError = isReconnectOutput(outputBuffer);
       if (authError) {
         this.setStatus("auth_required", false, "Cursor CLI login required. Run cursor-agent login.", {
@@ -289,15 +294,38 @@ export class SamplerDispatcher {
           retryCount: extractRetryCount(outputBuffer)
         });
         this.failAnnotations(annotations, "Cursor CLI login required.");
-      } else if (networkError && code !== 0) {
-        this.setStatus("agent_network_error", false, "Agent lost connection to Cursor service", {
+      } else if (trustError) {
+        this.setStatus("workspace_trust_required", false, "Cursor workspace trust required. Restart MCP after trusting this folder.", {
           lastLogPath: logPath,
           lastLogEmpty: !sawOutput,
           lastOutput: tailLine(outputBuffer),
           retryCount: extractRetryCount(outputBuffer)
         });
-        this.failAnnotations(annotations, "Agent network connection failed.");
+        this.failAnnotations(annotations, "Cursor workspace trust required.");
+      } else if (networkError && code !== 0) {
+        if (isResourceExhaustedOutput(outputBuffer) && this.takeTransientRetry(annotationIds)) {
+          const retryDelayMs = envTimeoutMs("SAMPLER_DISPATCH_NETWORK_RETRY_MS", 10_000);
+          this.setStatus("agent_reconnecting", true, "Cursor API busy; retrying...", {
+            lastLogPath: logPath,
+            lastLogEmpty: !sawOutput,
+            lastOutput: tailLine(outputBuffer),
+            retryCount: extractRetryCount(outputBuffer)
+          });
+          this.options.store.updateProgressForAnnotations(annotationIds, "Cursor API busy; retrying...");
+          this.notifyHub();
+          this.finishRun();
+          setTimeout(() => this.dispatchIfNeeded(), retryDelayMs);
+          return;
+        }
+        this.setStatus("agent_network_error", false, "Cursor API temporarily unavailable. Try again.", {
+          lastLogPath: logPath,
+          lastLogEmpty: !sawOutput,
+          lastOutput: tailLine(outputBuffer),
+          retryCount: extractRetryCount(outputBuffer)
+        });
+        this.failAnnotations(annotations, "Cursor API temporarily unavailable. Try again.");
       } else if (code === 0) {
+        this.clearTransientRetry(annotationIds);
         this.setStatus("agent_completed", true, "Agent run completed", {
           lastLogPath: logPath,
           lastLogEmpty: !sawOutput,
@@ -337,7 +365,7 @@ export class SamplerDispatcher {
     }
 
     this.ignoredChildren.add(child);
-    console.error(`Sampler auto-dispatch stopping pid ${child.pid ?? "unknown"}: ${reason}`);
+    console.error(`Sampler info: auto-dispatch stopping pid ${child.pid ?? "unknown"}: ${reason}`);
     child.kill("SIGTERM");
     setTimeout(() => {
       if (child.exitCode === null && child.signalCode === null) {
@@ -350,12 +378,28 @@ export class SamplerDispatcher {
     return this.statusValue.state === "agent_stalled"
       || this.statusValue.state === "agent_network_error"
       || this.statusValue.state === "last_run_failed"
-      || this.statusValue.state === "auth_required";
+      || this.statusValue.state === "auth_required"
+      || this.statusValue.state === "workspace_trust_required";
   }
 
   private failAnnotations(annotations: StoredAnnotationWithSession[], progress: string): void {
     this.options.store.updateProgressForAnnotations(annotations.map((annotation) => annotation.id), progress);
     this.notifyHub();
+  }
+
+  private takeTransientRetry(annotationIds: string[]): boolean {
+    const key = annotationIds.slice().sort().join(",");
+    const attempts = this.transientRetryCounts.get(key) ?? 0;
+    if (attempts >= 1) {
+      this.transientRetryCounts.delete(key);
+      return false;
+    }
+    this.transientRetryCounts.set(key, attempts + 1);
+    return true;
+  }
+
+  private clearTransientRetry(annotationIds: string[]): void {
+    this.transientRetryCounts.delete(annotationIds.slice().sort().join(","));
   }
 
   private notifyHub(): void {
@@ -521,7 +565,10 @@ const SERVER_PROGRESS_VALUES = new Set([
   "Agent is working...",
   "Agent started but has not responded.",
   "Agent network connection failed.",
+  "Cursor API busy; retrying...",
+  "Cursor API temporarily unavailable. Try again.",
   "Cursor CLI login required.",
+  "Cursor workspace trust required.",
   "Agent failed to start.",
   "Agent failed. See dispatch log.",
   "Agent logs are not writable."
@@ -536,7 +583,19 @@ function isReconnectOutput(output: string): boolean {
   return normalized.includes("connection lost")
     || normalized.includes("reconnecting")
     || normalized.includes("retry attempt")
+    || normalized.includes("resource_exhausted")
+    || normalized.includes("retriableerror")
     || normalized.includes("agentn.global.api5.cursor.sh");
+}
+
+function isResourceExhaustedOutput(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return normalized.includes("resource_exhausted") || normalized.includes("retriableerror");
+}
+
+function isWorkspaceTrustOutput(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return normalized.includes("workspace trust required") || normalized.includes("pass --trust");
 }
 
 export function isInvalidCursorConfigOutput(output: string): boolean {

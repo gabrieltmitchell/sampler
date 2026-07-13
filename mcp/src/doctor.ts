@@ -3,6 +3,7 @@ import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync 
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { agentLogsDir, checkCursorAgent, ensureAgentLogsWritable } from "./dispatch.js";
+import { samplerPortStatus } from "./port.js";
 import type { SamplerStore } from "./store.js";
 
 export interface DoctorOptions {
@@ -19,6 +20,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   const npm = commandInfo("npm", ["--version"]);
   const cursorAgent = checkCursorAgent();
   const portUsed = await isPortInUse(port);
+  const portStatus = portUsed ? await samplerPortStatus(port) : null;
   const latestAuthError = latestAgentLogAuthError(store);
 
   console.log("Sampler MCP doctor");
@@ -29,6 +31,11 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
   console.log(`sessions: ${store.listSessions().length}`);
   console.log(`pending annotations: ${store.getPending().length}`);
   console.log(`port ${port}: ${portUsed ? "in use" : "available"}`);
+  if (portStatus?.ok) {
+    console.log(`port ${port} owner: sampler-mcp ${portStatus.version ?? "unknown version"}${portStatus.store ? ` (store: ${portStatus.store})` : ""}`);
+  } else if (portStatus) {
+    console.log(`port ${port} owner: not sampler-mcp or not reachable as HTTP (${portStatus.error})`);
+  }
   console.log(`npm: ${npm.ok ? `${npm.version} (${npm.path})` : `missing (${npm.error})`}`);
   console.log(`npx: ${npx.ok ? `${npx.version} (${npx.path})` : `missing/broken (${npx.error})`}`);
   console.log(`cursor-agent: ${cursorAgent.ok ? "ok" : `${cursorAgent.state} (${cursorAgent.reason})`}`);
@@ -43,12 +50,28 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
 
   console.log("");
   console.log("Recommended setup:");
-  console.log('npx add-mcp "npx -y sampler-mcp@latest server --project ."');
+  console.log("npx -y sampler-mcp@latest init");
   console.log("");
   console.log("Preflight:");
   console.log("cursor-agent --version");
   console.log("cursor-agent login");
   console.log("npx -y sampler-mcp@latest doctor --project .");
+  console.log("");
+  console.log("Logs:");
+  console.log("Cursor MCP: View > Output > MCP, or tail -f ~/Library/Application\\ Support/Cursor/logs/*/mcpprocess.log");
+  console.log("Sampler agent runs: tail -f ~/.sampler/agent-logs/*.log");
+
+  if (portUsed) {
+    console.log("");
+    if (portStatus?.ok) {
+      console.log(`Port ${port} is already used by another Sampler MCP server.`);
+      console.log("Only one local Simulator HTTP bridge can listen on this port at a time.");
+      console.log("For multiple repos, prefer project-local .cursor/mcp.json entries from `sampler-mcp init`, then stop/reload the old Home/global MCP server.");
+    } else {
+      console.log(`Port ${port} is occupied by another process.`);
+    }
+    console.log(`Inspect it with: lsof -nP -iTCP:${port} -sTCP:LISTEN`);
+  }
 
   if (!logCheck.ok) {
     console.log("");

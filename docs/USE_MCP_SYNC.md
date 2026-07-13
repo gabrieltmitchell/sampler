@@ -38,6 +38,13 @@ npx -y sampler-mcp@latest init
 
 This writes the project's `.cursor/mcp.json` and automatically picks a working `npx` or `npm exec` command form. Then reload MCP servers in Cursor (Settings > MCP) or restart Cursor.
 
+If `npx` itself fails before `init` can run, try:
+
+```bash
+/opt/homebrew/bin/npx -y sampler-mcp@latest init
+npm exec --yes --package=sampler-mcp@latest -- sampler-mcp init
+```
+
 Or start the server manually:
 
 ```bash
@@ -74,6 +81,23 @@ Cursor MCP config example:
 
 If `npx` fails with `npm ERR! cb.apply is not a function`, your shell may be finding an old Node/npm install. `sampler-mcp init` detects this automatically and writes an `npm exec` or absolute-path form instead. If configuring by hand, use the full path to a modern `npx`, commonly `/opt/homebrew/bin/npx` on Apple Silicon Macs.
 
+## Port Conflicts And Multiple Repos
+
+The Simulator bridge uses `http://localhost:4747`, so only one Sampler MCP server can listen there at a time. If Cursor reports `EADDRINUSE 127.0.0.1:4747`, stop the old Sampler MCP server or remove the Home/global Sampler MCP entry, then reload MCP.
+
+```bash
+lsof -nP -iTCP:4747 -sTCP:LISTEN
+```
+
+For multiple app repos, use project-local `.cursor/mcp.json` files from `sampler-mcp init`. A Home/global MCP entry can point auto-dispatch at the wrong checkout because `--project` controls where `cursor-agent` runs.
+
+Useful logs:
+
+```bash
+tail -f ~/Library/Application\ Support/Cursor/logs/*/mcpprocess.log
+tail -f ~/.sampler/agent-logs/*.log
+```
+
 ## MCP Tools
 
 The MCP server exposes tools like:
@@ -99,7 +123,9 @@ When the server is reachable, the Sampler widget shows a Send to Agent button. T
 
 ## Auto-Dispatch
 
-When the server runs inside a Cursor project and `cursor-agent` is available on `PATH`, new annotations automatically launch a local agent in that project. The dispatched agent acknowledges the annotation, updates progress text for the widget, makes the code change, rebuilds/relaunches the Simulator app, and resolves the annotation with a short summary.
+When the server runs inside a Cursor project and `cursor-agent` is available on `PATH`, new annotations automatically launch a local agent in that project with `--trust`. The dispatched agent acknowledges the annotation, updates progress text for the widget, makes the code change, rebuilds/relaunches the Simulator app, and resolves the annotation with a short summary.
+
+If the toast shows repeated `Agent reconnecting... retry N` messages, the Cursor API is reconnecting or temporarily overloaded. Sampler surfaces that separately from app setup errors.
 
 To disable this behavior, run:
 
@@ -121,6 +147,10 @@ cursor-agent login
 npx -y sampler-mcp@latest doctor --project .
 npx -y sampler-mcp@latest server --project .
 ```
+
+## Version Labels
+
+The in-app settings sheet shows the Swift/iOS widget package version (`Sampler.version`). `sampler-mcp --version` shows the npm MCP server/tooling version. `sampler-mcp update` reports both.
 
 ## Watch Mode Fallback
 

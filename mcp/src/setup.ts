@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { reportSwiftPackagePins } from "./doctor.js";
+import { samplerPortStatus } from "./port.js";
 import { packageVersion } from "./version.js";
 
 interface Runner {
@@ -44,7 +45,7 @@ export interface InitOptions {
   global?: boolean;
 }
 
-export function runInit(options: InitOptions): void {
+export async function runInit(options: InitOptions): Promise<void> {
   const projectPath = resolve(options.project);
   const configPath = options.global
     ? join(homedir(), ".cursor", "mcp.json")
@@ -53,9 +54,14 @@ export function runInit(options: InitOptions): void {
   const runner = detectRunner(projectPath);
   if (!runner) {
     console.error("No working npx or npm found. Install Node.js (https://nodejs.org) and retry.");
+    console.error("If npx itself is broken, try:");
+    console.error("/opt/homebrew/bin/npx -y sampler-mcp@latest init");
+    console.error("npm exec --yes --package=sampler-mcp@latest -- sampler-mcp init");
     process.exitCode = 1;
     return;
   }
+
+  const existingSampler = await samplerPortStatus(4747);
 
   let config: { mcpServers?: Record<string, unknown> } = {};
   if (existsSync(configPath)) {
@@ -81,6 +87,15 @@ export function runInit(options: InitOptions): void {
   console.log(`config: ${configPath}`);
   console.log(`runner: ${runner.label}`);
   console.log(`project: ${projectPath}`);
+  if (options.global) {
+    console.log("");
+    console.log("Warning: --global writes a Home MCP entry. For multiple app repos, project-local .cursor/mcp.json is safer because Sampler auto-dispatch uses the configured --project path.");
+  }
+  if (existingSampler.ok) {
+    console.log("");
+    console.log(`Note: another Sampler MCP server is already running on port 4747 (${existingSampler.version ?? "unknown version"}).`);
+    console.log("After changing config, stop/reload the old MCP server in Cursor so this project owns the Simulator bridge.");
+  }
   console.log("");
   console.log("Next steps:");
   console.log("1. In Cursor, reload MCP servers (Settings > MCP) or restart Cursor.");

@@ -33,22 +33,40 @@ npm run build
 node dist/index.js doctor --store /tmp/sampler-mcp-doctor
 ```
 
-## Release Process
+## Swift Widget Release Process
 
 Sampler uses semantic version tags so Swift Package Manager installs can pin releases with `from:`.
 
-1. Update docs if install instructions changed.
-2. Run the local checks above.
-3. Commit the release changes.
-4. Tag the release:
+1. Update the widget version shown in the settings sheet:
 
    ```bash
-   git tag 0.1.1
-   git push origin main
-   git push origin 0.1.1
+   scripts/release-widget-version 0.2.1
    ```
 
-5. Confirm the README examples still use the latest intended version.
+2. Update docs if install instructions changed.
+3. Run the local checks above.
+4. Commit the release changes.
+5. Tag the release:
+
+   ```bash
+   git tag 0.2.1
+   git push origin main
+   git push origin 0.2.1
+   ```
+
+6. Confirm the README examples still use the latest intended version.
+
+## MCP npm Release Process
+
+`sampler-mcp` has its own npm version. npm-only fixes do not need to change `Sampler.version` unless the Swift/iOS widget package changed too.
+
+```bash
+cd mcp
+npm version 0.2.1 --no-git-tag-version
+npm run typecheck
+npm run build
+npm publish --access public
+```
 
 ## Package Layout
 

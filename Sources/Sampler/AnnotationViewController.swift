@@ -830,6 +830,8 @@ final class AnnotationViewController: UIViewController {
         switch autoDispatch.state {
         case .authRequired:
             return "Cursor CLI login required."
+        case .workspaceTrustRequired:
+            return "Trust this folder in Cursor, then restart MCP."
         case .missingCursorAgent:
             return "Cursor CLI missing."
         case .invalidCursorConfig:
@@ -844,7 +846,7 @@ final class AnnotationViewController: UIViewController {
             }
             return "Agent reconnecting..."
         case .agentNetworkError:
-            return "Agent network connection failed."
+            return "Cursor API temporarily unavailable."
         case .lastRunFailed:
             return "Agent failed to start."
         case .disabled:

@@ -6,6 +6,7 @@ import { SamplerDispatcher } from "./dispatch.js";
 import { runDoctor } from "./doctor.js";
 import { AnnotationHub, startHttpServer } from "./http.js";
 import { startMcpServer } from "./mcp.js";
+import { isPortInUseError, portConflictMessage } from "./port.js";
 import { runInit, runUpdate } from "./setup.js";
 import { SamplerStore } from "./store.js";
 import type { AutoDispatchStatus } from "./types.js";
@@ -56,16 +57,27 @@ program
     });
 
     if (!options.mcpOnly) {
-      const http = await startHttpServer({
-        port: Number.parseInt(options.port, 10),
-        host: options.host,
-        store,
-        hub,
-        autoDispatchStatus: () => dispatcher?.status() ?? disabledStatus(),
-        retryDispatch: options.dispatch !== false ? () => dispatcher?.retry() : undefined
-      });
-      console.error(`Sampler HTTP server listening at ${http.url}`);
-      console.error(`Sampler store: ${store.rootDir}`);
+      const port = Number.parseInt(options.port, 10);
+      let http: Awaited<ReturnType<typeof startHttpServer>>;
+      try {
+        http = await startHttpServer({
+          port,
+          host: options.host,
+          store,
+          hub,
+          autoDispatchStatus: () => dispatcher?.status() ?? disabledStatus(),
+          retryDispatch: options.dispatch !== false ? () => dispatcher?.retry() : undefined
+        });
+      } catch (error) {
+        if (isPortInUseError(error)) {
+          console.error(`Sampler error: ${portConflictMessage(port, options.host)}`);
+          process.exitCode = 1;
+          return;
+        }
+        throw error;
+      }
+      console.error(`Sampler info: HTTP server listening at ${http.url}`);
+      console.error(`Sampler info: store: ${store.rootDir}`);
       if (options.dispatch !== false) {
         dispatcher = new SamplerDispatcher({
           baseUrl: http.url,
@@ -75,10 +87,10 @@ program
         });
         dispatcher.start();
         const dispatchStatus = dispatcher.status();
-        console.error(`Sampler auto-dispatch: ${dispatchStatus.healthy ? "enabled" : `disabled (${dispatchStatus.reason})`}`);
-        console.error(`Sampler auto-dispatch project: ${options.project}`);
+        console.error(`Sampler info: auto-dispatch: ${dispatchStatus.healthy ? "enabled" : `disabled (${dispatchStatus.reason})`}`);
+        console.error(`Sampler info: auto-dispatch project: ${options.project}`);
       } else {
-        console.error("Sampler auto-dispatch: disabled by --no-dispatch");
+        console.error("Sampler info: auto-dispatch disabled by --no-dispatch");
       }
     }
 
@@ -107,8 +119,8 @@ program
   .description("Write the Cursor MCP config for Sampler in this project")
   .option("--project <path>", "Project directory", process.cwd())
   .option("--global", "Write to ~/.cursor/mcp.json instead of the project's .cursor/mcp.json")
-  .action((options: { project: string; global?: boolean }) => {
-    runInit(options);
+  .action(async (options: { project: string; global?: boolean }) => {
+    await runInit(options);
   });
 
 program
