@@ -965,6 +965,11 @@ final class ToastView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+    }
+
     private func configure(title: String, iconName: String?, overlayTheme: OverlayTheme) {
         overrideUserInterfaceStyle = overlayTheme.userInterfaceStyle
         backgroundColor = overlayTheme.toastBackground
@@ -978,7 +983,31 @@ final class ToastView: UIView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
 
-        if let iconName {
+        if iconName == "checkmark.circle.fill" {
+            let checkmarkView = AnimatedToastSymbolView(
+                symbol: .checkmark,
+                circleColor: UIColor.systemGreen.withAlphaComponent(0.2),
+                symbolColor: .systemGreen
+            )
+            checkmarkView.translatesAutoresizingMaskIntoConstraints = false
+            stackView.addArrangedSubview(checkmarkView)
+            NSLayoutConstraint.activate([
+                checkmarkView.widthAnchor.constraint(equalToConstant: 26),
+                checkmarkView.heightAnchor.constraint(equalToConstant: 26)
+            ])
+        } else if iconName == "exclamationmark.bubble.fill" {
+            let exclamationView = AnimatedToastSymbolView(
+                symbol: .exclamation,
+                circleColor: UIColor.systemOrange.withAlphaComponent(0.2),
+                symbolColor: .systemOrange
+            )
+            exclamationView.translatesAutoresizingMaskIntoConstraints = false
+            stackView.addArrangedSubview(exclamationView)
+            NSLayoutConstraint.activate([
+                exclamationView.widthAnchor.constraint(equalToConstant: 26),
+                exclamationView.heightAnchor.constraint(equalToConstant: 26)
+            ])
+        } else if let iconName {
             let imageView = UIImageView(
                 image: UIImage(
                     systemName: iconName,
@@ -1003,25 +1032,113 @@ final class ToastView: UIView {
         stackView.addArrangedSubview(label)
 
         NSLayoutConstraint.activate([
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
-            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
-            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
         ])
     }
 }
 
+final class AnimatedToastSymbolView: UIView, CAAnimationDelegate {
+    enum Symbol {
+        case checkmark
+        case exclamation
+    }
+
+    private let symbol: Symbol
+    private let symbolLayer = CAShapeLayer()
+    private let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
+    private var hasAnimated = false
+
+    init(symbol: Symbol, circleColor: UIColor, symbolColor: UIColor) {
+        self.symbol = symbol
+        super.init(frame: .zero)
+        backgroundColor = circleColor
+        layer.cornerRadius = 16
+
+        symbolLayer.fillColor = UIColor.clear.cgColor
+        symbolLayer.strokeColor = symbolColor.cgColor
+        symbolLayer.lineWidth = 2.6
+        symbolLayer.lineCap = .round
+        symbolLayer.lineJoin = .round
+        symbolLayer.strokeEnd = 0
+        layer.addSublayer(symbolLayer)
+        feedbackGenerator.prepare()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+        symbolLayer.frame = bounds
+
+        let path = UIBezierPath()
+        switch symbol {
+        case .checkmark:
+            path.move(to: CGPoint(x: bounds.width * 0.27, y: bounds.height * 0.52))
+            path.addLine(to: CGPoint(x: bounds.width * 0.44, y: bounds.height * 0.68))
+            path.addLine(to: CGPoint(x: bounds.width * 0.75, y: bounds.height * 0.34))
+        case .exclamation:
+            path.move(to: CGPoint(x: bounds.width * 0.5, y: bounds.height * 0.27))
+            path.addLine(to: CGPoint(x: bounds.width * 0.5, y: bounds.height * 0.57))
+            path.move(to: CGPoint(x: bounds.width * 0.5, y: bounds.height * 0.73))
+            path.addLine(to: CGPoint(x: bounds.width * 0.5, y: bounds.height * 0.74))
+        }
+        symbolLayer.path = path.cgPath
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+
+        guard window != nil, !hasAnimated else {
+            return
+        }
+        hasAnimated = true
+        layoutIfNeeded()
+
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            symbolLayer.strokeEnd = 1
+            return
+        }
+
+        symbolLayer.strokeEnd = 1
+        let animation = CABasicAnimation(keyPath: "strokeEnd")
+        animation.fromValue = 0
+        animation.toValue = 1
+        animation.duration = 0.22
+        animation.beginTime = CACurrentMediaTime() + 0.12
+        animation.fillMode = .backwards
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        animation.delegate = self
+        symbolLayer.add(animation, forKey: "drawSymbol")
+    }
+
+    func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+        guard flag else {
+            return
+        }
+        feedbackGenerator.impactOccurred()
+    }
+}
+
 final class AgentStatusToastView: UIView {
-    enum State {
+    enum State: Equatable {
         case working
         case success
         case failure
     }
 
     private let stackView = UIStackView()
+    private let spinnerContainer = UIView()
     private let spinner = UIActivityIndicatorView(style: .medium)
-    private let iconView = UIImageView()
     private let label = UILabel()
+    private var symbolView: AnimatedToastSymbolView?
+    private var currentState: State?
     private var overlayTheme: OverlayTheme
 
     init(title: String, state: State, overlayTheme: OverlayTheme) {
@@ -1037,13 +1154,17 @@ final class AgentStatusToastView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.cornerRadius = bounds.height / 2
+    }
+
     func applyTheme(_ overlayTheme: OverlayTheme) {
         self.overlayTheme = overlayTheme
         overrideUserInterfaceStyle = overlayTheme.userInterfaceStyle
         backgroundColor = overlayTheme.toastBackground
         label.textColor = overlayTheme.primaryText
         spinner.color = overlayTheme.primaryText
-        iconView.tintColor = overlayTheme.primaryText
     }
 
     func update(title: String, state: State, animated: Bool) {
@@ -1088,13 +1209,14 @@ final class AgentStatusToastView: UIView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
 
+        spinnerContainer.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        spinnerContainer.layer.cornerRadius = 13
+        spinnerContainer.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(spinnerContainer)
+
         spinner.hidesWhenStopped = true
         spinner.translatesAutoresizingMaskIntoConstraints = false
-        stackView.addArrangedSubview(spinner)
-
-        iconView.contentMode = .scaleAspectFit
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        stackView.addArrangedSubview(iconView)
+        spinnerContainer.addSubview(spinner)
 
         label.font = .systemFont(ofSize: 14, weight: .semibold)
         label.textAlignment = .center
@@ -1102,40 +1224,67 @@ final class AgentStatusToastView: UIView {
         stackView.addArrangedSubview(label)
 
         NSLayoutConstraint.activate([
+            spinnerContainer.widthAnchor.constraint(equalToConstant: 26),
+            spinnerContainer.heightAnchor.constraint(equalToConstant: 26),
+            spinner.centerXAnchor.constraint(equalTo: spinnerContainer.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: spinnerContainer.centerYAnchor),
             spinner.widthAnchor.constraint(equalToConstant: 16),
             spinner.heightAnchor.constraint(equalToConstant: 16),
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
-            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
-            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
         ])
     }
 
     private func updateIndicator(for state: State) {
+        guard currentState != state else {
+            return
+        }
+        currentState = state
+        symbolView?.removeFromSuperview()
+        symbolView = nil
+
         switch state {
         case .working:
-            iconView.isHidden = true
-            spinner.isHidden = false
+            spinnerContainer.isHidden = false
             spinner.startAnimating()
         case .success:
             spinner.stopAnimating()
-            spinner.isHidden = true
-            iconView.isHidden = false
-            iconView.image = UIImage(
-                systemName: "checkmark.circle.fill",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            spinnerContainer.isHidden = true
+            showSymbol(
+                .checkmark,
+                circleColor: UIColor.systemGreen.withAlphaComponent(0.2),
+                symbolColor: .systemGreen
             )
         case .failure:
             spinner.stopAnimating()
-            spinner.isHidden = true
-            iconView.isHidden = false
-            iconView.image = UIImage(
-                systemName: "exclamationmark.circle.fill",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            spinnerContainer.isHidden = true
+            showSymbol(
+                .exclamation,
+                circleColor: UIColor.systemOrange.withAlphaComponent(0.2),
+                symbolColor: .systemOrange
             )
         }
+    }
+
+    private func showSymbol(
+        _ symbol: AnimatedToastSymbolView.Symbol,
+        circleColor: UIColor,
+        symbolColor: UIColor
+    ) {
+        let symbolView = AnimatedToastSymbolView(
+            symbol: symbol,
+            circleColor: circleColor,
+            symbolColor: symbolColor
+        )
+        symbolView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.insertArrangedSubview(symbolView, at: 0)
+        NSLayoutConstraint.activate([
+            symbolView.widthAnchor.constraint(equalToConstant: 26),
+            symbolView.heightAnchor.constraint(equalToConstant: 26)
+        ])
+        self.symbolView = symbolView
     }
 }
 

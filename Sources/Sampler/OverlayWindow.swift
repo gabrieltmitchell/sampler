@@ -133,10 +133,10 @@ final class OverlayRootViewController: UIViewController {
         }
     }
 
-    func showTransientMessage(_ message: String) {
+    func showTransientMessage(_ message: String, iconName: String = "info.circle.fill") {
         messageView?.removeFromSuperview()
 
-        let toastView = ToastView(title: message, iconName: "info.circle.fill", overlayTheme: selectedTheme)
+        let toastView = ToastView(title: message, iconName: iconName, overlayTheme: selectedTheme)
         toastView.alpha = 0
         toastView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(toastView)
@@ -190,7 +190,7 @@ final class OverlayRootViewController: UIViewController {
         }
         widget.onSendToAgent = { [weak self] in
             guard let self, let agentClient, isAgentSendAvailable else {
-                self?.showTransientMessage("MCP not set up")
+                self?.showTransientMessage("MCP not set up", iconName: "exclamationmark.bubble.fill")
                 return
             }
             annotationViewController?.sendToAgent(using: agentClient)
@@ -462,6 +462,7 @@ final class FloatingAnnotationWidget: UIControl {
     private let clipboardHelpView = UIView()
     private var settingsPageViews: [UIView] = []
     private let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
+    private var iconRotation: CGFloat = 0
     private var themedButtons: [UIButton] = []
     private var elevatedButtons: [UIButton] = []
     private var primaryLabels: [UILabel] = []
@@ -487,6 +488,7 @@ final class FloatingAnnotationWidget: UIControl {
     }
 
     func setMode(_ mode: Mode, animated: Bool) {
+        let previousMode = self.mode
         self.mode = mode
         let size: CGSize
         switch mode {
@@ -514,6 +516,10 @@ final class FloatingAnnotationWidget: UIControl {
         guard animated else {
             changes()
             return
+        }
+
+        if mode == .collapsed, previousMode != .collapsed {
+            rotateIconHalfTurn()
         }
 
         UIView.animate(
@@ -579,6 +585,23 @@ final class FloatingAnnotationWidget: UIControl {
 
         feedbackGenerator.prepare()
         applyTheme()
+    }
+
+    private func rotateIconHalfTurn() {
+        let currentRotation = (
+            iconView.layer.presentation()?.value(forKeyPath: "transform.rotation.z") as? NSNumber
+        )?.doubleValue ?? Double(iconRotation)
+        let targetRotation = CGFloat(currentRotation) + .pi
+        iconRotation = targetRotation
+
+        let animation = CABasicAnimation(keyPath: "transform.rotation.z")
+        animation.fromValue = currentRotation
+        animation.toValue = targetRotation
+        animation.duration = 0.26
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+        iconView.layer.setValue(targetRotation, forKeyPath: "transform.rotation.z")
+        iconView.layer.add(animation, forKey: "samplerIconHalfTurn")
     }
 
     func setAgentSendAvailable(_ isAvailable: Bool, animated: Bool) {
@@ -1052,6 +1075,7 @@ final class FloatingAnnotationWidget: UIControl {
         }
 
         triggerHaptic()
+        rotateIconHalfTurn()
         onActivate?()
     }
 
